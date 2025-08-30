@@ -158,12 +158,12 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
     
     setParkingSpots(initialParkingSpots);
 
-    // 초기 차량 생성 (모든 차선에 골고루)
+    // 초기 차량 생성 (간격을 두고 배치)
     const initialVehicles: SimVehicle[] = [];
     const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
     
     // 메인 도로 차량 (70%)
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 10; i++) { // 초기 차량 수 감소
       const direction = i % 2 === 0 ? 'N' : 'S';
       let x, y, angle, lane;
       
@@ -172,14 +172,14 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
         const lanes = [4, 5, 6];
         lane = lanes[i % lanes.length];
         x = LAYOUT.mainRoad.x + lane * LAYOUT.mainRoad.laneWidth + 12;
-        y = LAYOUT.height - 100 - (i * 100) - Math.random() * 50;
+        y = LAYOUT.height - 100 - (i * 150); // 간격 증가
         angle = 0;
       } else {
         // 남쪽으로 향하는 차량 (북쪽에서 시작, 우측 차선)
         const lanes = [1, 2, 3];
         lane = lanes[i % lanes.length];
         x = LAYOUT.mainRoad.x + lane * LAYOUT.mainRoad.laneWidth + 12;
-        y = 100 + (i * 100) + Math.random() * 50;
+        y = 100 + (i * 150); // 간격 증가
         angle = 180;
       }
       
@@ -202,20 +202,20 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
     }
     
     // 교차 도로 차량 (30%)
-    for (let i = 14; i < 20; i++) {
+    for (let i = 10; i < 15; i++) { // 수정된 인덱스
       const direction = i % 2 === 0 ? 'E' : 'W';
       let x, y, angle, lane;
       
       if (direction === 'E') {
         // 동쪽으로 향하는 차량
-        lane = (i - 14) % 2;
-        x = 100 + ((i - 14) * 150);
+        lane = (i - 10) % 2;
+        x = 100 + ((i - 10) * 200); // 간격 증가
         y = LAYOUT.crossRoad.y + lane * LAYOUT.crossRoad.laneWidth + 12;
         angle = 90;
       } else {
         // 서쪽으로 향하는 차량
-        lane = 2 + ((i - 14) % 2);
-        x = LAYOUT.width - 100 - ((i - 14) * 150);
+        lane = 2 + ((i - 10) % 2);
+        x = LAYOUT.width - 100 - ((i - 10) * 200); // 간격 증가
         y = LAYOUT.crossRoad.y + lane * LAYOUT.crossRoad.laneWidth + 12;
         angle = 270;
       }
@@ -345,14 +345,34 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             }
           }
           
+          // 새 차량 생성 위치에 충분한 공간이 있는지 확인
+          let canSpawn = true;
+          const minSpawnDistance = 80; // 최소 생성 거리
+          
+          for (const existing of newVehicles) {
+            const dx = existing.x - x;
+            const dy = existing.y - y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // 같은 차선이거나 인접 차선에 있는 차량과의 거리 확인
+            if (distance < minSpawnDistance) {
+              // 방향도 고려
+              const angleDiff = Math.abs(existing.angle - angle);
+              if (angleDiff < 45 || angleDiff > 315) {
+                canSpawn = false;
+                break;
+              }
+            }
+          }
+          
           const newId = `v${vehicleCounterRef.current++}`;
-          // ID 중복 체크
-          if (!newVehicles.find(v => v.id === newId)) {
+          // ID 중복 체크 및 안전 거리 확인
+          if (canSpawn && !newVehicles.find(v => v.id === newId)) {
             newVehicles.push({
               id: newId,
               x,
               y,
-              speed: isMainRoad ? 40 : 30,
+              speed: isMainRoad ? 30 : 20, // 초기 속도를 낮춤
               maxSpeed: isMainRoad ? (60 + Math.random() * 20) : (50 + Math.random() * 20),
               acceleration: 0,
               angle,
@@ -436,48 +456,136 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             updated.y > LAYOUT.intersection.y && 
             updated.y < LAYOUT.intersection.y + LAYOUT.intersection.height;
           
-          // 앞차와의 거리 계산
-          updated.distanceToFront = 100;
+          // 충돌 방지 시스템 - 더 정밀한 거리 계산
+          updated.distanceToFront = 1000;
+          let frontVehicle: typeof vehicle | null = null;
+          let closestSideDistance = 1000;
+          
           newVehicles.forEach(other => {
-            if (other.id === vehicle.id) return;
+            if (other.id === vehicle.id || other.isParked) return;
             
             const dx = other.x - vehicle.x;
             const dy = other.y - vehicle.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
-            // 같은 방향 차량인지 확인
-            if (Math.abs(other.angle - vehicle.angle) < 45) {
-              // 앞에 있는지 확인
+            // 정확한 차선 위치 계산
+            const laneWidth = 25;
+            const vehicleLength = 20;
+            const vehicleWidth = 10;
+            
+            // 같은 방향으로 이동하는 차량인지 확인
+            const angleDiff = Math.abs(other.angle - vehicle.angle);
+            const sameDirection = angleDiff < 30 || angleDiff > 330;
+            
+            // 차선 위치 비교 (더 정밀하게)
+            let lateralDistance = 0;
+            let longitudinalDistance = 0;
+            
+            if (vehicle.direction === 'N' || vehicle.direction === 'S') {
+              lateralDistance = Math.abs(dx);
+              longitudinalDistance = Math.abs(dy);
+            } else {
+              lateralDistance = Math.abs(dy);
+              longitudinalDistance = Math.abs(dx);
+            }
+            
+            const sameLane = lateralDistance < laneWidth * 0.8;
+            const adjacentLane = lateralDistance < laneWidth * 1.8;
+            
+            // 앞차 감지 (같은 차선)
+            if (sameLane && sameDirection) {
               let isInFront = false;
-              if (vehicle.direction === 'N') isInFront = other.y < vehicle.y && Math.abs(dx) < 30;
-              else if (vehicle.direction === 'S') isInFront = other.y > vehicle.y && Math.abs(dx) < 30;
-              else if (vehicle.direction === 'E') isInFront = other.x > vehicle.x && Math.abs(dy) < 30;
-              else if (vehicle.direction === 'W') isInFront = other.x < vehicle.x && Math.abs(dy) < 30;
+              
+              if (vehicle.direction === 'N') {
+                isInFront = other.y < vehicle.y && other.y > vehicle.y - 150;
+              } else if (vehicle.direction === 'S') {
+                isInFront = other.y > vehicle.y && other.y < vehicle.y + 150;
+              } else if (vehicle.direction === 'E') {
+                isInFront = other.x > vehicle.x && other.x < vehicle.x + 150;
+              } else if (vehicle.direction === 'W') {
+                isInFront = other.x < vehicle.x && other.x > vehicle.x - 150;
+              }
               
               if (isInFront && distance < updated.distanceToFront) {
                 updated.distanceToFront = distance;
+                frontVehicle = other;
               }
+            }
+            
+            // 인접 차선 차량 감지 (차선 변경 시 충돌 방지)
+            if (adjacentLane && !sameLane && distance < 50) {
+              closestSideDistance = Math.min(closestSideDistance, distance);
             }
           });
           
-          // 속도 조절
-          const safeDistance = 50;
+          // 적응형 안전거리 계산
+          const reactionTime = 1.0; // 반응 시간 (초)
+          const vehicleLength = 20;
+          const minSafeDistance = 25 + vehicleLength; // 최소 안전거리 (차량 길이 포함)
+          const dynamicSafeDistance = Math.max(
+            minSafeDistance,
+            updated.speed * reactionTime + vehicleLength * 2
+          );
+          
+          // 속도 조절 로직 개선
           if (updated.waitingForSignal) {
-            // 신호 대기 중 정지
-            updated.acceleration = -50;
+            // 신호 대기 - 완전 정지
+            updated.acceleration = -80;
             updated.speed = Math.max(0, updated.speed + updated.acceleration * deltaTime);
-          } else if (updated.distanceToFront < safeDistance) {
-            // 앞차 있을 때 감속
-            updated.acceleration = -30;
+          } else if (updated.distanceToFront < minSafeDistance) {
+            // 충돌 위험 - 긴급 제동
+            updated.acceleration = -100;
             updated.speed = Math.max(0, updated.speed + updated.acceleration * deltaTime);
-          } else if (updated.distanceToFront < safeDistance * 2) {
-            // 앞차 속도에 맞춤
-            updated.acceleration = -10;
-            updated.speed = Math.max(20, updated.speed + updated.acceleration * deltaTime);
+            
+            // 너무 가까우면 완전 정지
+            if (updated.distanceToFront < vehicleLength * 1.5) {
+              updated.speed = 0;
+            }
+          } else if (updated.distanceToFront < dynamicSafeDistance) {
+            // 안전거리 미달 - 앞차에 맞춰 속도 조절
+            if (frontVehicle) {
+              const relativeSpeed = updated.speed - frontVehicle.speed;
+              const timeToCollision = updated.distanceToFront / Math.max(1, relativeSpeed);
+              
+              if (timeToCollision < reactionTime * 2) {
+                // 충돌 임박 - 강한 제동
+                updated.acceleration = -40 - relativeSpeed * 2;
+              } else {
+                // 부드러운 속도 매칭
+                const targetSpeed = frontVehicle.speed * 0.95;
+                const speedError = updated.speed - targetSpeed;
+                updated.acceleration = -speedError * 3;
+              }
+              
+              updated.speed = Math.max(0, Math.min(frontVehicle.speed, updated.speed + updated.acceleration * deltaTime));
+            } else {
+              // 앞차 정보 없음 - 안전 감속
+              updated.acceleration = -15;
+              updated.speed = Math.max(20, updated.speed + updated.acceleration * deltaTime);
+            }
+          } else if (updated.distanceToFront < dynamicSafeDistance * 2) {
+            // 적정 거리 - 속도 조절
+            if (frontVehicle && frontVehicle.speed < updated.speed) {
+              // 앞차가 느림 - 점진적 감속
+              updated.acceleration = -5;
+              updated.speed = Math.max(frontVehicle.speed, updated.speed + updated.acceleration * deltaTime);
+            } else {
+              // 속도 유지 또는 약간 가속
+              updated.acceleration = 5;
+              updated.speed = Math.min(updated.maxSpeed * 0.8, updated.speed + updated.acceleration * deltaTime);
+            }
           } else {
-            // 자유 주행 - 가속
-            updated.acceleration = 20;
-            updated.speed = Math.min(updated.maxSpeed, updated.speed + updated.acceleration * deltaTime);
+            // 충분한 거리 - 목표 속도까지 가속
+            const targetSpeed = updated.maxSpeed;
+            const speedError = targetSpeed - updated.speed;
+            updated.acceleration = Math.min(20, speedError * 2);
+            updated.speed = Math.min(targetSpeed, updated.speed + updated.acceleration * deltaTime);
+          }
+          
+          // 인접 차선 차량과의 안전 확보
+          if (closestSideDistance < 30) {
+            // 옆 차량이 너무 가까움 - 속도 감소
+            updated.speed = Math.min(updated.speed, 30);
           }
           
           // 위치 업데이트 (배속 적용)
