@@ -4,8 +4,8 @@ import { useSimulation } from '@/hooks/useSimulation';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { Vehicle, Coordinate } from '@/types/vehicle';
 import { ParkingSlot } from '@/types/slot';
-import RoadMapCanvas from '@/components/simulation/canvas/RoadMapCanvas';
 import StatsCards from '@/components/simulation/StatsCards';
+import CrossroadSimulator from '@/components/simulation/CrossroadSimulator';
 import { SEJONG_CENTER } from '@/constants/sejongLocations';
 
 const SimulationDashboard = () => {
@@ -242,58 +242,16 @@ const SimulationDashboard = () => {
           className="bg-white rounded-xl shadow-card overflow-hidden relative"
           style={{ height: 'calc(100vh - 200px)' }}
         >
-          {/* 지도 컨트롤 툴바 */}
-          <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-2">
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setShowStats(!showStats)}
-                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  showStats 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-                title="통계 표시/숨김"
-              >
-                📊
-              </button>
-              
-              <button
-                onClick={() => setMapTheme(mapTheme === 'light' ? 'dark' : 'light')}
-                className="px-3 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded text-sm font-medium transition-colors"
-                title="테마 변경"
-              >
-                {mapTheme === 'light' ? '🌙' : '☀️'}
-              </button>
-              
-              <button
-                onClick={() => window.location.reload()}
-                className="px-3 py-1 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded text-sm font-medium transition-colors"
-                title="새로고침"
-              >
-                🔄
-              </button>
-              
-              <div className="w-px h-6 bg-gray-300"></div>
-              
-              <div className="text-xs text-gray-600">
-                차량: {vehicles.length}대 | 슬롯: {slots.length}개
-              </div>
-            </div>
-          </div>
 
-          {/* 캔버스 기반 지도 */}
-          <RoadMapCanvas
+          {/* 교차로 시뮬레이션 뷰 */}
+          <CrossroadSimulator
             vehicles={vehicles}
             slots={slots}
-            width={Math.max(800, window.innerWidth - 100)}
-            height={Math.max(500, window.innerHeight - 250)}
-            initialCenter={SEJONG_CENTER}
-            initialZoom={0.8}
-            theme={mapTheme}
-            showControls={true}
+            currentTime={currentTime}
+            speed={speed}
+            isRunning={isRunning}
             onVehicleClick={handleVehicleClick}
             onSlotClick={handleSlotClick}
-            onMapClick={handleMapClick}
             className="w-full h-full"
           />
         </motion.div>
