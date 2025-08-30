@@ -4,7 +4,6 @@ import { useSimulation } from '@/hooks/useSimulation';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { Vehicle, Coordinate } from '@/types/vehicle';
 import { ParkingSlot } from '@/types/slot';
-import StatsCards from '@/components/simulation/StatsCards';
 import CrossroadSimulator from '@/components/simulation/CrossroadSimulator';
 import { SEJONG_CENTER } from '@/constants/sejongLocations';
 
@@ -21,7 +20,6 @@ const SimulationDashboard = () => {
   const mapRef = useRef<any>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
-  const [showStats, setShowStats] = useState(true);
   const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
 
   const formatTime = (date: Date) => {
@@ -222,17 +220,6 @@ const SimulationDashboard = () => {
           </div>
         </motion.div>
 
-        {/* 통계 카드 */}
-        {showStats && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-4"
-          >
-            <StatsCards vehicles={vehicles} slots={slots} />
-          </motion.div>
-        )}
 
         {/* 메인 지도 영역 */}
         <motion.div

@@ -34,6 +34,10 @@ interface SimVehicle {
   turningDirection?: 'left' | 'right' | 'straight';
   distanceToFront: number;
   color: string;
+  waitCounter?: number;  // 대기 카운터
+  toRemove?: boolean;    // 제거 플래그
+  intersectionWaitTime?: number;  // 교차로 대기 시간
+  priority?: number;  // 우선순위 (교착 상태 해결용)
 }
 
 // 신호등 타입
@@ -116,12 +120,12 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
     parkingOrchestratorRef.current = new ParkingOrchestrator();
     congestionAnalyzerRef.current = new CongestionAnalyzer();
 
-    // 신호등 초기화 (교차로 바깥쪽에 배치)
+    // 신호등 초기화 (교차로 각 모서리에 균일하게 배치)
     const initialSignals: Signal[] = [
-      { id: 'N', direction: 'N', state: 'green', leftTurnState: 'red', timer: 20, x: 440, y: 130 },  // 북쪽 신호 (왼쪽 위)
-      { id: 'S', direction: 'S', state: 'green', leftTurnState: 'red', timer: 20, x: 740, y: 330 },  // 남쪽 신호 (오른쪽 아래)
-      { id: 'E', direction: 'E', state: 'red', leftTurnState: 'red', timer: 20, x: 740, y: 130 },     // 동쪽 신호 (오른쪽 위)
-      { id: 'W', direction: 'W', state: 'red', leftTurnState: 'red', timer: 20, x: 440, y: 330 }      // 서쪽 신호 (왼쪽 아래)
+      { id: 'N', direction: 'N', state: 'green', leftTurnState: 'red', timer: 20, x: 460, y: 100 },  // 북쪽 신호 (왼쪽 위)
+      { id: 'S', direction: 'S', state: 'green', leftTurnState: 'red', timer: 20, x: 715, y: 315 },  // 남쪽 신호 (오른쪽 아래)
+      { id: 'E', direction: 'E', state: 'red', leftTurnState: 'red', timer: 20, x: 715, y: 100 },     // 동쪽 신호 (오른쪽 위)
+      { id: 'W', direction: 'W', state: 'red', leftTurnState: 'red', timer: 20, x: 460, y: 315 }      // 서쪽 신호 (왼쪽 아래)
     ];
     setSignals(initialSignals);
 
@@ -396,35 +400,74 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
           
           // 정지선 위치 계산 (교차로 진입 전)
           let stopLineDistance = Infinity;
-          let atStopLine = false;
+          let beforeStopLine = false;
+          let passedStopLine = false;
           
           if (updated.direction === 'N') {
             const stopLineY = LAYOUT.intersection.y + LAYOUT.intersection.height + 15;
             stopLineDistance = updated.y - stopLineY;
-            atStopLine = updated.y > stopLineY - 10 && updated.y < stopLineY + 40;
+            beforeStopLine = updated.y > stopLineY && updated.y < stopLineY + 80; // 정지선 전
+            passedStopLine = updated.y < stopLineY; // 정지선 통과
           } else if (updated.direction === 'S') {
             const stopLineY = LAYOUT.intersection.y - 15;
             stopLineDistance = stopLineY - updated.y;
-            atStopLine = updated.y < stopLineY + 10 && updated.y > stopLineY - 40;
+            beforeStopLine = updated.y < stopLineY && updated.y > stopLineY - 80;
+            passedStopLine = updated.y > stopLineY;
           } else if (updated.direction === 'E') {
             const stopLineX = LAYOUT.intersection.x - 15;
             stopLineDistance = stopLineX - updated.x;
-            atStopLine = updated.x < stopLineX + 10 && updated.x > stopLineX - 40;
+            beforeStopLine = updated.x < stopLineX && updated.x > stopLineX - 80;
+            passedStopLine = updated.x > stopLineX;
           } else if (updated.direction === 'W') {
             const stopLineX = LAYOUT.intersection.x + LAYOUT.intersection.width + 15;
             stopLineDistance = updated.x - stopLineX;
-            atStopLine = updated.x > stopLineX - 10 && updated.x < stopLineX + 40;
+            beforeStopLine = updated.x > stopLineX && updated.x < stopLineX + 80;
+            passedStopLine = updated.x < stopLineX;
           }
           
-          // 신호 확인 및 정지 처리
-          if (atStopLine || (stopLineDistance > 0 && stopLineDistance < 80)) {
+          // 교차로 꼬리물기 방지 - 교차로 내 정체 확인
+          let intersectionBlocked = false;
+          if (beforeStopLine && !passedStopLine) {
+            // 교차로 내 같은 방향 차량들의 정체 확인
+            let blockedVehiclesCount = 0;
+            newVehicles.forEach(other => {
+              if (other.id === vehicle.id) return;
+              
+              // 교차로 내부 차량 확인
+              const otherInIntersection = 
+                other.x > LAYOUT.intersection.x - 20 &&
+                other.x < LAYOUT.intersection.x + LAYOUT.intersection.width + 20 &&
+                other.y > LAYOUT.intersection.y - 20 &&
+                other.y < LAYOUT.intersection.y + LAYOUT.intersection.height + 20;
+              
+              // 교차로 내에서 정지한 차량 수 카운트
+              if (otherInIntersection && other.speed < 5) {
+                blockedVehiclesCount++;
+              }
+            });
+            
+            // 교차로 내 정체 차량이 3대 이상이면 진입 금지
+            if (blockedVehiclesCount >= 3) {
+              intersectionBlocked = true;
+            }
+          }
+          
+          // 신호 확인 및 정지 처리 - 정지선을 통과하지 않은 경우에만
+          if (beforeStopLine && !passedStopLine) {
             const signal = signalsRef.current.find(s => s.direction === updated.direction);
-            if (signal) {
+            
+            // 교차로가 막혀있으면 신호와 관계없이 정지
+            if (intersectionBlocked) {
+              updated.waitingForSignal = true;
+              if (stopLineDistance < 20) {
+                updated.speed = 0;
+              }
+            } else if (signal) {
               // 좌회전 차량
               if (updated.turningDirection === 'left') {
                 if (signal.leftTurnState === 'red' || (signal.leftTurnState === 'yellow' && stopLineDistance > 30)) {
                   updated.waitingForSignal = true;
-                  if (stopLineDistance > 0 && stopLineDistance < 15) {
+                  if (stopLineDistance < 15) {
                     updated.speed = 0;
                   }
                 } else {
@@ -435,7 +478,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
               else {
                 if (signal.state === 'red' || (signal.state === 'yellow' && stopLineDistance > 30)) {
                   updated.waitingForSignal = true;
-                  if (stopLineDistance > 0 && stopLineDistance < 15) {
+                  if (stopLineDistance < 15) {
                     updated.speed = 0;
                   }
                 } else {
@@ -446,6 +489,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
               updated.waitingForSignal = false;
             }
           } else {
+            // 정지선을 통과했거나 정지선에서 멀리 있으면 신호 무시
             updated.waitingForSignal = false;
           }
           
@@ -588,94 +632,377 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             updated.speed = Math.min(updated.speed, 30);
           }
           
-          // 위치 업데이트 (배속 적용)
+          // 위치 업데이트 전 예상 위치 계산
           const displacement = updated.speed * deltaTime * speedRef.current * 0.3;
+          let newX = updated.x;
+          let newY = updated.y;
+          
+          // 예상 위치 계산
+          if (updated.direction === 'N') {
+            newY = updated.y - displacement;
+          } else if (updated.direction === 'S') {
+            newY = updated.y + displacement;
+          } else if (updated.direction === 'E') {
+            newX = updated.x + displacement;
+          } else if (updated.direction === 'W') {
+            newX = updated.x - displacement;
+          }
+          
+          // 예상 위치에서 충돌 검사
+          let willCollide = false;
+          newVehicles.forEach(other => {
+            if (other.id === vehicle.id || other.isParked) return;
+            
+            const dx = other.x - newX;
+            const dy = other.y - newY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // 충돌 임계값 (차량 크기 고려)
+            if (distance < 25) {
+              willCollide = true;
+            }
+          });
+          
+          // 충돌 예상 시 정지
+          if (willCollide) {
+            updated.speed = 0;
+            updated.acceleration = 0;
+          } else {
+            // 안전하면 위치 업데이트
+            updated.x = newX;
+            updated.y = newY;
+          }
+          
+          // 교차로 내 대기 시간 추적 및 교착 상태 감지
+          if (inIntersection) {
+            // 교차로 대기 시간 증가
+            if (!updated.intersectionWaitTime) {
+              updated.intersectionWaitTime = 0;
+            }
+            
+            // 속도가 매우 낮으면 대기 중으로 간주
+            if (updated.speed < 5) {
+              updated.intersectionWaitTime += deltaTime;
+            } else {
+              updated.intersectionWaitTime = 0;
+            }
+            
+            // 교착 상태 감지 (교차로에서 2초 이상 정체)
+            if (updated.intersectionWaitTime > 2) {
+              // 우선순위 할당 (방향과 대기 시간 기반)
+              if (!updated.priority) {
+                // 북->남, 남->북이 우선 (주도로)
+                if (updated.direction === 'N' || updated.direction === 'S') {
+                  updated.priority = 100 + updated.intersectionWaitTime;
+                } else {
+                  updated.priority = 50 + updated.intersectionWaitTime;
+                }
+              }
+              
+              // 교착 상태 해결 로직
+              let shouldYield = false;
+              newVehicles.forEach(other => {
+                if (other.id === vehicle.id || other.isParked) return;
+                
+                // 다른 차량도 교차로 내에 있는지 확인
+                const otherInIntersection = 
+                  other.x > LAYOUT.intersection.x &&
+                  other.x < LAYOUT.intersection.x + LAYOUT.intersection.width &&
+                  other.y > LAYOUT.intersection.y &&
+                  other.y < LAYOUT.intersection.y + LAYOUT.intersection.height;
+                
+                if (otherInIntersection) {
+                  const dx = other.x - updated.x;
+                  const dy = other.y - updated.y;
+                  const distance = Math.sqrt(dx * dx + dy * dy);
+                  
+                  // 너무 가까운 차량이 있고
+                  if (distance < 50) {
+                    // 상대 차량도 정체 상태이면
+                    if (other.intersectionWaitTime && other.intersectionWaitTime > 1) {
+                      // 우선순위 비교
+                      const otherPriority = other.priority || 0;
+                      if (otherPriority > (updated.priority || 0)) {
+                        shouldYield = true;
+                      }
+                    }
+                  }
+                }
+              });
+              
+              // 양보해야 하는 경우 후진 또는 대기
+              if (shouldYield) {
+                // 약간 후진하여 공간 확보
+                const backDistance = 5 * deltaTime;
+                if (updated.direction === 'N') {
+                  updated.y += backDistance;
+                } else if (updated.direction === 'S') {
+                  updated.y -= backDistance;
+                } else if (updated.direction === 'E') {
+                  updated.x -= backDistance;
+                } else if (updated.direction === 'W') {
+                  updated.x += backDistance;
+                }
+                updated.speed = 0;
+              } else if (updated.intersectionWaitTime > 5) {
+                // 5초 이상 대기 시 강제 진행
+                updated.speed = Math.min(30, updated.maxSpeed * 0.5);
+                updated.priority = 1000; // 최고 우선순위
+              }
+            }
+          } else {
+            // 교차로 밖에서는 대기 시간 초기화
+            updated.intersectionWaitTime = 0;
+            updated.priority = undefined;
+          }
           
           // 교차로에서 회전 처리
           if (inIntersection && updated.turningDirection !== 'straight' && !updated.waitingForSignal) {
             const intersectionCenterX = LAYOUT.intersection.x + 100;
             const intersectionCenterY = LAYOUT.intersection.y + 50;
             
-            // 회전 애니메이션
-            if (updated.turningDirection === 'left') {
-              if (updated.direction === 'N' && updated.y < intersectionCenterY) {
-                updated.angle -= 2;
-                if (updated.angle <= -90) {
-                  updated.angle = 270;
-                  updated.direction = 'W';
-                }
-              } else if (updated.direction === 'S' && updated.y > intersectionCenterY) {
-                updated.angle += 2;
-                if (updated.angle >= 270) {
-                  updated.angle = 90;
-                  updated.direction = 'E';
-                }
-              } else if (updated.direction === 'E' && updated.x > intersectionCenterX) {
-                updated.angle -= 2;
-                if (updated.angle <= 0) {
-                  updated.angle = 0;
-                  updated.direction = 'N';
-                }
-              } else if (updated.direction === 'W' && updated.x < intersectionCenterX) {
-                updated.angle += 2;
-                if (updated.angle >= 360) {
-                  updated.angle = 180;
-                  updated.direction = 'S';
+            // 교차로 내 다른 차량과의 거리 확인
+            let canTurn = true;
+            newVehicles.forEach(other => {
+              if (other.id === vehicle.id || other.isParked) return;
+              
+              // 교차로 내 차량인지 확인
+              const otherInIntersection = 
+                other.x > LAYOUT.intersection.x &&
+                other.x < LAYOUT.intersection.x + LAYOUT.intersection.width &&
+                other.y > LAYOUT.intersection.y &&
+                other.y < LAYOUT.intersection.y + LAYOUT.intersection.height;
+              
+              if (otherInIntersection) {
+                const dx = other.x - updated.x;
+                const dy = other.y - updated.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 교차로 내에서는 더 큰 안전거리 필요 (교착 상태 고려)
+                if (distance < 40) {
+                  // 상대 차량도 오래 대기 중이면 조금 더 여유 있게 판단
+                  if (other.intersectionWaitTime && other.intersectionWaitTime > 2) {
+                    if (distance < 30) {
+                      canTurn = false;
+                    }
+                  } else {
+                    canTurn = false;
+                  }
                 }
               }
-            } else if (updated.turningDirection === 'right') {
+            });
+            
+            // 안전하지 않으면 속도 감소 (교착 상태 방지)
+            if (!canTurn) {
+              // 대기 시간이 길면 천천히라도 진행
+              if (updated.intersectionWaitTime && updated.intersectionWaitTime > 3) {
+                updated.speed = Math.max(10, updated.speed * 0.7);
+              } else {
+                updated.speed = Math.max(5, updated.speed * 0.5);
+              }
+            }
+            
+            // 안전한 경우에만 회전
+            if (canTurn && updated.turningDirection === 'left') {
               if (updated.direction === 'N' && updated.y < intersectionCenterY) {
-                updated.angle += 2;
-                if (updated.angle >= 90) {
-                  updated.angle = 90;
-                  updated.direction = 'E';
-                }
-              } else if (updated.direction === 'S' && updated.y > intersectionCenterY) {
-                updated.angle -= 2;
-                if (updated.angle <= 90) {
+                // 북쪽에서 왼쪽으로 (0 -> 270)
+                updated.angle = (updated.angle - 2 + 360) % 360;
+                if (updated.angle <= 272 && updated.angle >= 268) {
                   updated.angle = 270;
                   updated.direction = 'W';
+                  updated.turningDirection = 'straight'; // 회전 완료
+                }
+              } else if (updated.direction === 'S' && updated.y > intersectionCenterY) {
+                // 남쪽에서 왼쪽으로 (180 -> 90)
+                updated.angle = (updated.angle - 2 + 360) % 360;
+                if (updated.angle <= 92 && updated.angle >= 88) {
+                  updated.angle = 90;
+                  updated.direction = 'E';
+                  updated.turningDirection = 'straight';
                 }
               } else if (updated.direction === 'E' && updated.x > intersectionCenterX) {
-                updated.angle += 2;
-                if (updated.angle >= 180) {
-                  updated.angle = 180;
-                  updated.direction = 'S';
-                }
-              } else if (updated.direction === 'W' && updated.x < intersectionCenterX) {
-                updated.angle -= 2;
-                if (updated.angle <= 180) {
+                // 동쪽에서 왼쪽으로 (90 -> 0)
+                updated.angle = (updated.angle - 2 + 360) % 360;
+                if (updated.angle <= 2 || updated.angle >= 358) {
                   updated.angle = 0;
                   updated.direction = 'N';
+                  updated.turningDirection = 'straight';
+                }
+              } else if (updated.direction === 'W' && updated.x < intersectionCenterX) {
+                // 서쪽에서 왼쪽으로 (270 -> 180)
+                updated.angle = (updated.angle - 2 + 360) % 360;
+                if (updated.angle <= 182 && updated.angle >= 178) {
+                  updated.angle = 180;
+                  updated.direction = 'S';
+                  updated.turningDirection = 'straight';
+                }
+              }
+            } else if (canTurn && updated.turningDirection === 'right') {
+              if (updated.direction === 'N' && updated.y < intersectionCenterY) {
+                // 북쪽에서 오른쪽으로 (0 -> 90)
+                updated.angle = (updated.angle + 2) % 360;
+                if (updated.angle >= 88 && updated.angle <= 92) {
+                  updated.angle = 90;
+                  updated.direction = 'E';
+                  updated.turningDirection = 'straight';
+                }
+              } else if (updated.direction === 'S' && updated.y > intersectionCenterY) {
+                // 남쪽에서 오른쪽으로 (180 -> 270)
+                updated.angle = (updated.angle + 2) % 360;
+                if (updated.angle >= 268 && updated.angle <= 272) {
+                  updated.angle = 270;
+                  updated.direction = 'W';
+                  updated.turningDirection = 'straight';
+                }
+              } else if (updated.direction === 'E' && updated.x > intersectionCenterX) {
+                // 동쪽에서 오른쪽으로 (90 -> 180)
+                updated.angle = (updated.angle + 2) % 360;
+                if (updated.angle >= 178 && updated.angle <= 182) {
+                  updated.angle = 180;
+                  updated.direction = 'S';
+                  updated.turningDirection = 'straight';
+                }
+              } else if (updated.direction === 'W' && updated.x < intersectionCenterX) {
+                // 서쪽에서 오른쪽으로 (270 -> 0/360)
+                updated.angle = (updated.angle + 2) % 360;
+                if (updated.angle >= 358 || updated.angle <= 2) {
+                  updated.angle = 0;
+                  updated.direction = 'N';
+                  updated.turningDirection = 'straight';
                 }
               }
             }
           }
           
-          // 직진 이동
+          // 화면 경계에서 대기 시간 추적
+          if (!updated.waitCounter) {
+            updated.waitCounter = 0;
+          }
+          
+          // 화면 경계 처리 (순간이동 또는 제거)
           if (updated.direction === 'N') {
-            updated.y -= displacement;
             if (updated.y < -100) {
-              updated.y = LAYOUT.height + 100;
-              updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+              // 반대편으로 이동 전 안전 확인
+              const newY = LAYOUT.height + 100;
+              let canRespawn = true;
+              
+              newVehicles.forEach(other => {
+                if (other.id === vehicle.id) return;
+                const dy = Math.abs(other.y - newY);
+                const dx = Math.abs(other.x - updated.x);
+                if (dy < 60 && dx < 30) {
+                  canRespawn = false;
+                }
+              });
+              
+              if (canRespawn) {
+                updated.y = newY;
+                updated.angle = 0; // 각도 초기화 확실히
+                updated.direction = 'N'; // 방향 확실히
+                updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+                updated.waitCounter = 0;
+              } else {
+                // 대기 카운터 증가
+                updated.waitCounter++;
+                
+                // 3초(60프레임) 이상 대기하면 제거 표시
+                if (updated.waitCounter > 60) {
+                  updated.toRemove = true;
+                } else {
+                  updated.y = -100;
+                  updated.speed = 0;
+                }
+              }
             }
           } else if (updated.direction === 'S') {
-            updated.y += displacement;
             if (updated.y > LAYOUT.height + 100) {
-              updated.y = -100;
-              updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+              const newY = -100;
+              let canRespawn = true;
+              
+              newVehicles.forEach(other => {
+                if (other.id === vehicle.id) return;
+                const dy = Math.abs(other.y - newY);
+                const dx = Math.abs(other.x - updated.x);
+                if (dy < 60 && dx < 30) {
+                  canRespawn = false;
+                }
+              });
+              
+              if (canRespawn) {
+                updated.y = newY;
+                updated.angle = 180; // 각도 초기화
+                updated.direction = 'S'; // 방향 확실히
+                updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+                updated.waitCounter = 0;
+              } else {
+                updated.waitCounter++;
+                if (updated.waitCounter > 60) {
+                  updated.toRemove = true;
+                } else {
+                  updated.y = LAYOUT.height + 100;
+                  updated.speed = 0;
+                }
+              }
             }
           } else if (updated.direction === 'E') {
-            updated.x += displacement;
             if (updated.x > LAYOUT.width + 100) {
-              updated.x = -100;
-              updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+              const newX = -100;
+              let canRespawn = true;
+              
+              newVehicles.forEach(other => {
+                if (other.id === vehicle.id) return;
+                const dx = Math.abs(other.x - newX);
+                const dy = Math.abs(other.y - updated.y);
+                if (dx < 60 && dy < 30) {
+                  canRespawn = false;
+                }
+              });
+              
+              if (canRespawn) {
+                updated.x = newX;
+                updated.angle = 90; // 각도 초기화
+                updated.direction = 'E'; // 방향 확실히
+                updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+                updated.waitCounter = 0;
+              } else {
+                updated.waitCounter++;
+                if (updated.waitCounter > 60) {
+                  updated.toRemove = true;
+                } else {
+                  updated.x = LAYOUT.width + 100;
+                  updated.speed = 0;
+                }
+              }
             }
           } else if (updated.direction === 'W') {
-            updated.x -= displacement;
             if (updated.x < -100) {
-              updated.x = LAYOUT.width + 100;
-              updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+              const newX = LAYOUT.width + 100;
+              let canRespawn = true;
+              
+              newVehicles.forEach(other => {
+                if (other.id === vehicle.id) return;
+                const dx = Math.abs(other.x - newX);
+                const dy = Math.abs(other.y - updated.y);
+                if (dx < 60 && dy < 30) {
+                  canRespawn = false;
+                }
+              });
+              
+              if (canRespawn) {
+                updated.x = newX;
+                updated.angle = 270; // 각도 초기화
+                updated.direction = 'W'; // 방향 확실히
+                updated.turningDirection = Math.random() < 0.7 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right';
+                updated.waitCounter = 0;
+              } else {
+                updated.waitCounter++;
+                if (updated.waitCounter > 60) {
+                  updated.toRemove = true;
+                } else {
+                  updated.x = -100;
+                  updated.speed = 0;
+                }
+              }
             }
           }
           
@@ -730,9 +1057,13 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
           
           return updated;
         }).filter(v => 
-          // 화면 밖으로 너무 멀리 나간 차량 제거
-          v.x > -200 && v.x < LAYOUT.width + 200 &&
-          v.y > -200 && v.y < LAYOUT.height + 200
+          // 제거 표시된 차량 제거
+          !v.toRemove &&
+          // 화면 밖으로 너무 멀리 나간 차량 제거 (대기 중인 차량은 유지)
+          (v.waitCounter && v.waitCounter > 0 ? true : (
+            v.x > -200 && v.x < LAYOUT.width + 200 &&
+            v.y > -200 && v.y < LAYOUT.height + 200
+          ))
         );
       });
       
@@ -834,115 +1165,102 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
         {signals.map(signal => (
           <g key={signal.id}>
             
-            {/* 신호등 박스 */}
+            {/* 신호등 박스 - 한국식 4색 신호등 */}
             <g transform={`translate(${signal.x}, ${signal.y})`}>
-              <rect x={-5} y={-5} width={55} height={70} fill="#1a1a1a" rx={4} />
+              <rect x={0} y={0} width={25} height={85} fill="#1a1a1a" rx={4} />
               
-              {/* 직진 신호 */}
-              <g>
-                <rect x={0} y={0} width={20} height={60} fill="#222" rx={3} />
-                
-                {/* 빨간불 */}
-                <circle
-                  cx={10}
-                  cy={10}
-                  r={7}
-                  fill={signal.state === 'red' ? '#FF0000' : '#330000'}
-                  opacity={signal.state === 'red' ? 1 : 0.3}
-                >
-                  {signal.state === 'red' && (
-                    <animate
-                      attributeName="r"
-                      values="7;8;7"
-                      dur="1s"
-                      repeatCount="indefinite"
-                    />
-                  )}
-                </circle>
-                
-                {/* 노란불 */}
-                <circle
-                  cx={10}
-                  cy={30}
-                  r={7}
-                  fill={signal.state === 'yellow' ? '#FFD700' : '#333300'}
-                  opacity={signal.state === 'yellow' ? 1 : 0.3}
-                >
-                  {signal.state === 'yellow' && (
-                    <animate
-                      attributeName="opacity"
-                      values="1;0.6;1"
-                      dur="0.5s"
-                      repeatCount="indefinite"
-                    />
-                  )}
-                </circle>
-                
-                {/* 초록불 */}
-                <circle
-                  cx={10}
-                  cy={50}
-                  r={7}
-                  fill={signal.state === 'green' ? '#00FF00' : '#003300'}
-                  opacity={signal.state === 'green' ? 1 : 0.3}
-                >
-                  {signal.state === 'green' && (
-                    <animate
-                      attributeName="r"
-                      values="7;8;7"
-                      dur="1s"
-                      repeatCount="indefinite"
-                    />
-                  )}
-                </circle>
-              </g>
-              
-              {/* 좌회전 신호 */}
-              <g transform="translate(25, 0)">
-                <rect x={0} y={0} width={20} height={60} fill="#222" rx={3} />
-                
-                {/* 좌회전 화살표 - 빨간색 */}
-                <g transform="translate(10, 10)">
-                  <path
-                    d="M 0 0 L -4 0 L -4 -3 L -7 0 L -4 3 L -4 0"
-                    fill={signal.leftTurnState === 'red' ? '#FF0000' : '#330000'}
-                    opacity={signal.leftTurnState === 'red' ? 1 : 0.3}
+              {/* 빨간불 (최상단) */}
+              <circle
+                cx={12.5}
+                cy={12}
+                r={8}
+                fill={signal.state === 'red' ? '#FF0000' : '#330000'}
+                opacity={signal.state === 'red' ? 1 : 0.3}
+              >
+                {signal.state === 'red' && (
+                  <animate
+                    attributeName="r"
+                    values="8;9;8"
+                    dur="1s"
+                    repeatCount="indefinite"
                   />
-                </g>
-                
-                {/* 좌회전 화살표 - 노란색 */}
-                <g transform="translate(10, 30)">
-                  <path
-                    d="M 0 0 L -4 0 L -4 -3 L -7 0 L -4 3 L -4 0"
-                    fill={signal.leftTurnState === 'yellow' ? '#FFD700' : '#333300'}
-                    opacity={signal.leftTurnState === 'yellow' ? 1 : 0.3}
-                  />
-                </g>
-                
-                {/* 좌회전 화살표 - 초록색 */}
-                <g transform="translate(10, 50)">
-                  <path
-                    d="M 0 0 L -4 0 L -4 -3 L -7 0 L -4 3 L -4 0"
-                    fill={signal.leftTurnState === 'green' ? '#00FF00' : '#003300'}
-                    opacity={signal.leftTurnState === 'green' ? 1 : 0.3}
-                  >
-                    {signal.leftTurnState === 'green' && (
-                      <animate
-                        attributeName="opacity"
-                        values="1;0.7;1"
-                        dur="1s"
-                        repeatCount="indefinite"
-                      />
-                    )}
-                  </path>
-                </g>
-              </g>
+                )}
+              </circle>
               
-              {/* 타이머 */}
-              <rect x={-5} y={65} width={55} height={20} fill="#000" rx={2} />
+              {/* 노란불 (두번째) */}
+              <circle
+                cx={12.5}
+                cy={32}
+                r={8}
+                fill={signal.state === 'yellow' ? '#FFD700' : '#333300'}
+                opacity={signal.state === 'yellow' ? 1 : 0.3}
+              >
+                {signal.state === 'yellow' && (
+                  <animate
+                    attributeName="opacity"
+                    values="1;0.6;1"
+                    dur="0.5s"
+                    repeatCount="indefinite"
+                  />
+                )}
+              </circle>
+              
+              {/* 좌회전 화살표 (세번째) */}
+              <circle
+                cx={12.5}
+                cy={52}
+                r={8}
+                fill="#000000"
+                stroke={signal.leftTurnState === 'green' ? '#00FF00' : '#003300'}
+                strokeWidth={0.5}
+                opacity={signal.leftTurnState === 'green' ? 1 : 0.3}
+              />
+              {/* 단순한 삼각형 화살표 */}
+              <polygon
+                points="7,52 18,47 18,57"
+                fill={signal.leftTurnState === 'green' ? '#00FF00' : '#003300'}
+                opacity={signal.leftTurnState === 'green' ? 1 : 0.3}
+              >
+                {signal.leftTurnState === 'green' && (
+                  <animate
+                    attributeName="opacity"
+                    values="1;0.8;1"
+                    dur="1s"
+                    repeatCount="indefinite"
+                  />
+                )}
+              </polygon>
+              
+              {/* 초록불 (최하단) */}
+              <circle
+                cx={12.5}
+                cy={72}
+                r={8}
+                fill={signal.state === 'green' ? '#00FF00' : '#003300'}
+                opacity={signal.state === 'green' ? 1 : 0.3}
+              >
+                {signal.state === 'green' && (
+                  <animate
+                    attributeName="r"
+                    values="8;9;8"
+                    dur="1s"
+                    repeatCount="indefinite"
+                  />
+                )}
+              </circle>
+              
+              {/* 타이머 - 방향에 따라 위치 조정 */}
+              <rect 
+                x={signal.direction === 'E' || signal.direction === 'S' ? 30 : -25} 
+                y={35} 
+                width={20} 
+                height={15} 
+                fill="#000" 
+                rx={2} 
+              />
               <text
-                x={22}
-                y={78}
+                x={signal.direction === 'E' || signal.direction === 'S' ? 40 : -15}
+                y={45}
                 textAnchor="middle"
                 fill={
                   signal.leftTurnState === 'green' ? '#66FF66' :
@@ -958,10 +1276,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
               </text>
             </g>
             
-            {/* 방향 표시 */}
+            {/* 방향 표시 - 남쪽과 서쪽은 신호등 아래에 표시 */}
             <text
-              x={signal.x + 10}
-              y={signal.y - 10}
+              x={signal.x + 12.5}
+              y={signal.direction === 'S' || signal.direction === 'W' ? signal.y + 100 : signal.y - 10}
               textAnchor="middle"
               fill="#666"
               fontSize={10}
@@ -1046,7 +1364,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             y1={LAYOUT.intersection.y + LAYOUT.intersection.height + 15}
             x2={LAYOUT.mainRoad.x + LAYOUT.mainRoad.width}
             y2={LAYOUT.intersection.y + LAYOUT.intersection.height + 15}
-            stroke="white"
+            stroke="#9CA3AF"
             strokeWidth={4}
           />
           {/* 남쪽 방향 정지선 */}
@@ -1055,7 +1373,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             y1={LAYOUT.intersection.y - 15}
             x2={LAYOUT.mainRoad.x + LAYOUT.mainRoad.width}
             y2={LAYOUT.intersection.y - 15}
-            stroke="white"
+            stroke="#9CA3AF"
             strokeWidth={4}
           />
           {/* 동쪽 방향 정지선 */}
@@ -1064,7 +1382,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             y1={LAYOUT.crossRoad.y}
             x2={LAYOUT.intersection.x - 15}
             y2={LAYOUT.crossRoad.y + LAYOUT.crossRoad.height}
-            stroke="white"
+            stroke="#9CA3AF"
             strokeWidth={4}
           />
           {/* 서쪽 방향 정지선 */}
@@ -1073,7 +1391,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             y1={LAYOUT.crossRoad.y}
             x2={LAYOUT.intersection.x + LAYOUT.intersection.width + 15}
             y2={LAYOUT.crossRoad.y + LAYOUT.crossRoad.height}
-            stroke="white"
+            stroke="#9CA3AF"
             strokeWidth={4}
           />
         </g>
