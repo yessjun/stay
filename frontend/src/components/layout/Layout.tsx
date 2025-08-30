@@ -28,9 +28,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <p>&copy; 2025 STAY Team. 제12회 대한민국 SW융합 해커톤 대회</p>
             </div>
             <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span>세종시 스마트시티 솔루션</span>
+              <span>공유 자율주행 차량의 대기 슬롯 동적 오케스트레이션 플랫폼</span>
               <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
-              <span>자율주행 모빌리티 플랫폼</span>
+              <span>STAY</span>
             </div>
           </div>
         </div>

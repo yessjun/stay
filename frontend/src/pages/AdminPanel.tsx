@@ -169,80 +169,9 @@ const AdminPanel = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* 헤더 */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">지자체 관리자 패널</h1>
-            <p className="mt-2 text-gray-600">세종시 교통 인프라 및 슬롯 관리 시스템</p>
-          </div>
-          
-          {/* 시나리오 선택 */}
-          <div className="relative">
-            <select
-              value={selectedScenario}
-              onChange={(e) => handleScenarioChange(e.target.value)}
-              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-3 pr-10 font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-sejong-blue focus:border-transparent"
-            >
-              {scenarios.map((scenario) => (
-                <option key={scenario.id} value={scenario.id}>
-                  {scenario.icon} {scenario.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDownIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
-          </div>
-        </div>
-      </motion.div>
 
-      {/* 상단 빠른 제어 툴바 */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
-      >
-        <div className="bg-white rounded-xl shadow-card p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <CogIcon className="h-5 w-5 mr-2" />
-              빠른 제어
-            </h3>
-            <div className="flex items-center space-x-3">
-              <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleQuickAction('add_vehicles')}
-                className="flex items-center space-x-1 bg-green-500 hover:bg-green-600 text-white text-sm px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                <span>🚗</span>
-                <span>차량 +20</span>
-              </motion.button>
-              <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleQuickAction('optimize_slots')}
-                className="flex items-center space-x-1 bg-blue-500 hover:bg-blue-600 text-white text-sm px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                <span>🎯</span>
-                <span>AI 최적화</span>
-              </motion.button>
-              <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleQuickAction('zone_inspection')}
-                className="flex items-center space-x-1 bg-orange-500 hover:bg-orange-600 text-white text-sm px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                <span>🔍</span>
-                <span>구역 점검</span>
-              </motion.button>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+
+
 
       {/* 상단 통계 바 */}
       <motion.div
@@ -299,41 +228,41 @@ const AdminPanel = () => {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="mb-6"
+        className="mb-4"
       >
-        <div className="bg-white rounded-xl shadow-card p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">실시간 수요/공급 현황</h3>
-            <div className="flex items-center space-x-4 text-sm">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+        <div className="bg-white rounded-xl shadow-card p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-base font-semibold text-gray-900">실시간 수요/공급 현황</h3>
+            <div className="flex items-center space-x-3 text-xs">
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                 <span className="text-gray-600">차량 수요</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <span className="text-gray-600">슬롯 공급</span>
               </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* 수요/공급 막대 그래프 */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-gray-700">구역별 현황</h4>
+            <div className="space-y-2">
+              <h4 className="text-xs font-medium text-gray-700">구역별 현황</h4>
               {zoneStats.map((zoneData) => {
                 return (
-                  <div key={zoneData.zoneId} className="space-y-2">
-                    <div className="flex justify-between items-center text-sm">
+                  <div key={zoneData.zoneId} className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
                       <span className="font-medium">{zoneData.zoneName}</span>
-                      <span className={`text-xs px-2 py-1 rounded ${
+                      <span className={`text-xs px-1 py-0.5 rounded ${
                         zoneData.utilization > 80 ? 'bg-red-100 text-red-700' :
                         zoneData.utilization > 60 ? 'bg-yellow-100 text-yellow-700' :
                         'bg-green-100 text-green-700'
                       }`}>
-                        {zoneData.utilization}% 이용률
+                        {zoneData.utilization}%
                       </span>
                     </div>
-                    <div className="relative h-6 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden">
                       {/* 공급량 (배경) - 전체 슬롯 수 */}
                       <div 
                         className="absolute inset-y-0 left-0 bg-blue-200 rounded-full"
@@ -346,7 +275,7 @@ const AdminPanel = () => {
                       ></div>
                     </div>
                     <div className="flex justify-between text-xs text-gray-500">
-                      <span>차량: {zoneData.demand}대</span>
+                      <span>차량: {zoneData.demand}</span>
                       <span>슬롯: {zoneData.occupied}/{zoneData.supply}</span>
                     </div>
                   </div>
@@ -355,15 +284,15 @@ const AdminPanel = () => {
             </div>
 
             {/* 시간대별 트렌드 */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-gray-700">시간대별 트렌드 (과거 12시간)</h4>
-              <div className="h-32 flex items-end space-x-1">
+            <div className="space-y-2">
+              <h4 className="text-xs font-medium text-gray-700">시간대별 트렌드 (과거 12시간)</h4>
+              <div className="h-20 flex items-end space-x-1">
                 {hourlyTrendData.map((hourData, i) => {
                   const isCurrentHour = i === 11; // 마지막 시간이 현재 시간
                   
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center">
-                      <div className="w-full max-w-4 flex flex-col justify-end h-24 space-y-1">
+                      <div className="w-full max-w-3 flex flex-col justify-end h-16 space-y-1">
                         {/* 공급 바 (배경) */}
                         <div 
                           className={`w-full rounded-sm transition-all duration-500 ${
@@ -382,19 +311,18 @@ const AdminPanel = () => {
                           }}
                         ></div>
                       </div>
-                      <span className={`text-xs mt-1 ${
+                      <span className={`text-xs mt-0.5 ${
                         isCurrentHour ? 'font-bold text-gray-900' : 'text-gray-500'
                       }`}>
                         {hourData.hour.toString().padStart(2, '0')}
-                        {isCurrentHour && <div className="text-xs text-blue-600">현재</div>}
                       </span>
                     </div>
                   );
                 })}
               </div>
               <div className="text-xs text-gray-500 text-center">
-                현재시간: {new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} | 
-                실제 차량: {vehicles.length}대, 슬롯: {slots.length}개
+                현재: {new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} | 
+                차량: {vehicles.length}대, 슬롯: {slots.length}개
               </div>
             </div>
           </div>

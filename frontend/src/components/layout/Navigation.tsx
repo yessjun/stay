@@ -17,21 +17,21 @@ const Navigation = () => {
   const navItems = [
     {
       path: '/',
-      label: '시뮬레이션 대시보드',
+      label: '도로 시뮬레이션',
       icon: ChartBarIcon,
       description: '실시간 차량 및 슬롯 모니터링'
     },
     {
       path: '/admin',
-      label: '지자체 관리자',
+      label: '대기 슬롯 관리',
       icon: CogIcon,
       description: '슬롯 관리 및 시스템 제어'
     },
     {
       path: '/impact',
-      label: '기대효과',
+      label: '스마트시티',
       icon: PresentationChartBarIcon,
-      description: '스마트시티 솔루션 효과'
+      description: '스마트시티 AI 관리 시스템'
     }
   ];
 
@@ -51,7 +51,7 @@ const Navigation = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">STAY</h1>
-                <p className="text-xs text-gray-500">세종시 스마트 모빌리티</p>
+                <p className="text-xs text-gray-500">공유 자율주행 차량의 대기 슬롯 동적 오케스트레이션 플랫폼</p>
               </div>
             </motion.div>
           </div>

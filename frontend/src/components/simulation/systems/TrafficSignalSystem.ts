@@ -12,10 +12,11 @@ export interface TrafficSignal {
 export class TrafficSignalSystem {
   private signals: Map<string, TrafficSignal>;
   private cycleTime: number = 60; // 신호 주기 (초)
-  private yellowTime: number = 3; // 황색 신호 시간
+  private yellowTime: number = 5; // 황색 신호 시간 (3초 -> 5초로 증가)
   private currentPhase: number = 0;
   private phaseTimer: number = 0;
   private phaseInitialized: boolean = false;
+  private useLeftTurnLane: boolean = true; // 좌회전 전용 차선 사용 (8단계 신호 체계)
   
   constructor() {
     this.signals = new Map();
@@ -57,97 +58,174 @@ export class TrafficSignalSystem {
   public update(deltaTime: number): void {
     this.phaseTimer += deltaTime;
     
-    // 현재 신호 단계 처리 (좌회전 분리)
-    switch (this.currentPhase) {
-      case 0: // 남북 좌회전
-        if (!this.phaseInitialized) {
-          this.setNorthSouthLeftTurn();
-          this.phaseInitialized = true;
-        }
-        if (this.phaseTimer >= 10) {
-          this.setNorthSouthLeftTurnYellow();
-          this.currentPhase = 1;
-          this.phaseTimer = 0;
-          this.phaseInitialized = false;
-        }
-        break;
-        
-      case 1: // 남북 좌회전 황색
-        if (this.phaseTimer >= this.yellowTime) {
-          this.setAllRed();
-          this.currentPhase = 2;
-          this.phaseTimer = 0;
-        }
-        break;
-        
-      case 2: // 남북 직진
-        if (!this.phaseInitialized) {
-          this.setNorthSouthStraight();
-          this.phaseInitialized = true;
-        }
-        if (this.phaseTimer >= 15) {
-          this.setNorthSouthYellow();
-          this.currentPhase = 3;
-          this.phaseTimer = 0;
-          this.phaseInitialized = false;
-        }
-        break;
-        
-      case 3: // 남북 직진 황색
-        if (this.phaseTimer >= this.yellowTime) {
-          this.setAllRed();
-          this.currentPhase = 4;
-          this.phaseTimer = 0;
-        }
-        break;
-        
-      case 4: // 동서 좌회전
-        if (!this.phaseInitialized) {
-          this.setEastWestLeftTurn();
-          this.phaseInitialized = true;
-        }
-        if (this.phaseTimer >= 10) {
-          this.setEastWestLeftTurnYellow();
-          this.currentPhase = 5;
-          this.phaseTimer = 0;
-          this.phaseInitialized = false;
-        }
-        break;
-        
-      case 5: // 동서 좌회전 황색
-        if (this.phaseTimer >= this.yellowTime) {
-          this.setAllRed();
-          this.currentPhase = 6;
-          this.phaseTimer = 0;
-        }
-        break;
-        
-      case 6: // 동서 직진
-        if (!this.phaseInitialized) {
-          this.setEastWestStraight();
-          this.phaseInitialized = true;
-        }
-        if (this.phaseTimer >= 15) {
-          this.setEastWestYellow();
-          this.currentPhase = 7;
-          this.phaseTimer = 0;
-          this.phaseInitialized = false;
-        }
-        break;
-        
-      case 7: // 동서 직진 황색
-        if (this.phaseTimer >= this.yellowTime) {
-          this.setAllRed();
-          this.currentPhase = 0;
-          this.phaseTimer = 0;
-        }
-        break;
+    // 좌회전 전용 차선이 없는 경우 직좌 신호 사용 (4단계)
+    if (!this.useLeftTurnLane) {
+      switch (this.currentPhase) {
+        case 0: // 남북 직좌 (직진+좌회전 동시)
+          if (!this.phaseInitialized) {
+            this.setNorthSouthStraightLeft();
+            this.phaseInitialized = true;
+          }
+          if (this.phaseTimer >= 30) { // 20초 -> 30초로 증가
+            this.setNorthSouthYellow();
+            this.currentPhase = 1;
+            this.phaseTimer = 0;
+            this.phaseInitialized = false;
+          }
+          break;
+          
+        case 1: // 남북 황색
+          if (this.phaseTimer >= this.yellowTime) {
+            this.setAllRed();
+            this.currentPhase = 2;
+            this.phaseTimer = 0;
+          }
+          break;
+          
+        case 2: // 동서 직좌 (직진+좌회전 동시)
+          if (!this.phaseInitialized) {
+            this.setEastWestStraightLeft();
+            this.phaseInitialized = true;
+          }
+          if (this.phaseTimer >= 30) { // 20초 -> 30초로 증가
+            this.setEastWestYellow();
+            this.currentPhase = 3;
+            this.phaseTimer = 0;
+            this.phaseInitialized = false;
+          }
+          break;
+          
+        case 3: // 동서 황색
+          if (this.phaseTimer >= this.yellowTime) {
+            this.setAllRed();
+            this.currentPhase = 0;
+            this.phaseTimer = 0;
+          }
+          break;
+      }
+    } else {
+      // 좌회전 전용 차선이 있는 경우 (8단계 - 기존 로직)
+      switch (this.currentPhase) {
+        case 0: // 남북 좌회전
+          if (!this.phaseInitialized) {
+            this.setNorthSouthLeftTurn();
+            this.phaseInitialized = true;
+          }
+          if (this.phaseTimer >= 15) { // 10초 -> 15초로 증가
+            this.setNorthSouthLeftTurnYellow();
+            this.currentPhase = 1;
+            this.phaseTimer = 0;
+            this.phaseInitialized = false;
+          }
+          break;
+          
+        case 1: // 남북 좌회전 황색
+          if (this.phaseTimer >= this.yellowTime) {
+            this.setAllRed();
+            this.currentPhase = 2;
+            this.phaseTimer = 0;
+          }
+          break;
+          
+        case 2: // 남북 직진
+          if (!this.phaseInitialized) {
+            this.setNorthSouthStraight();
+            this.phaseInitialized = true;
+          }
+          if (this.phaseTimer >= 25) { // 15초 -> 25초로 증가
+            this.setNorthSouthYellow();
+            this.currentPhase = 3;
+            this.phaseTimer = 0;
+            this.phaseInitialized = false;
+          }
+          break;
+          
+        case 3: // 남북 직진 황색
+          if (this.phaseTimer >= this.yellowTime) {
+            this.setAllRed();
+            this.currentPhase = 4;
+            this.phaseTimer = 0;
+          }
+          break;
+          
+        case 4: // 동서 좌회전
+          if (!this.phaseInitialized) {
+            this.setEastWestLeftTurn();
+            this.phaseInitialized = true;
+          }
+          if (this.phaseTimer >= 15) { // 10초 -> 15초로 증가
+            this.setEastWestLeftTurnYellow();
+            this.currentPhase = 5;
+            this.phaseTimer = 0;
+            this.phaseInitialized = false;
+          }
+          break;
+          
+        case 5: // 동서 좌회전 황색
+          if (this.phaseTimer >= this.yellowTime) {
+            this.setAllRed();
+            this.currentPhase = 6;
+            this.phaseTimer = 0;
+          }
+          break;
+          
+        case 6: // 동서 직진
+          if (!this.phaseInitialized) {
+            this.setEastWestStraight();
+            this.phaseInitialized = true;
+          }
+          if (this.phaseTimer >= 25) { // 15초 -> 25초로 증가
+            this.setEastWestYellow();
+            this.currentPhase = 7;
+            this.phaseTimer = 0;
+            this.phaseInitialized = false;
+          }
+          break;
+          
+        case 7: // 동서 직진 황색
+          if (this.phaseTimer >= this.yellowTime) {
+            this.setAllRed();
+            this.currentPhase = 0;
+            this.phaseTimer = 0;
+          }
+          break;
+      }
     }
     
     // 타이머 업데이트
     this.signals.forEach(signal => {
       signal.timer = Math.max(0, signal.timer - deltaTime);
     });
+  }
+  
+  // 남북 직좌 신호 (직진만, 좌회전은 대향차량에 양보)
+  private setNorthSouthStraightLeft() {
+    this.signals.get('N')!.state = 'green';
+    this.signals.get('S')!.state = 'green';
+    this.signals.get('N')!.leftTurnState = 'red';  // 좌회전은 양보 원칙
+    this.signals.get('S')!.leftTurnState = 'red';  // 좌회전은 양보 원칙
+    this.signals.get('E')!.state = 'red';
+    this.signals.get('W')!.state = 'red';
+    this.signals.get('E')!.leftTurnState = 'red';
+    this.signals.get('W')!.leftTurnState = 'red';
+    
+    this.signals.get('N')!.timer = 30;
+    this.signals.get('S')!.timer = 30;
+  }
+  
+  // 동서 직좌 신호 (직진만, 좌회전은 대향차량에 양보)
+  private setEastWestStraightLeft() {
+    this.signals.get('E')!.state = 'green';
+    this.signals.get('W')!.state = 'green';
+    this.signals.get('E')!.leftTurnState = 'red';  // 좌회전은 양보 원칙
+    this.signals.get('W')!.leftTurnState = 'red';  // 좌회전은 양보 원칙
+    this.signals.get('N')!.state = 'red';
+    this.signals.get('S')!.state = 'red';
+    this.signals.get('N')!.leftTurnState = 'red';
+    this.signals.get('S')!.leftTurnState = 'red';
+    
+    this.signals.get('E')!.timer = 30;
+    this.signals.get('W')!.timer = 30;
   }
   
   // 남북 좌회전 신호
@@ -161,8 +239,8 @@ export class TrafficSignalSystem {
     this.signals.get('E')!.leftTurnState = 'red';
     this.signals.get('W')!.leftTurnState = 'red';
     
-    this.signals.get('N')!.timer = 10;
-    this.signals.get('S')!.timer = 10;
+    this.signals.get('N')!.timer = 15;
+    this.signals.get('S')!.timer = 15;
   }
   
   private setNorthSouthLeftTurnYellow() {
@@ -183,8 +261,8 @@ export class TrafficSignalSystem {
     this.signals.get('E')!.leftTurnState = 'red';
     this.signals.get('W')!.leftTurnState = 'red';
     
-    this.signals.get('N')!.timer = 15;
-    this.signals.get('S')!.timer = 15;
+    this.signals.get('N')!.timer = 25;
+    this.signals.get('S')!.timer = 25;
   }
   
   private setNorthSouthYellow() {
@@ -206,8 +284,8 @@ export class TrafficSignalSystem {
     this.signals.get('N')!.leftTurnState = 'red';
     this.signals.get('S')!.leftTurnState = 'red';
     
-    this.signals.get('E')!.timer = 10;
-    this.signals.get('W')!.timer = 10;
+    this.signals.get('E')!.timer = 15;
+    this.signals.get('W')!.timer = 15;
   }
   
   private setEastWestLeftTurnYellow() {
@@ -228,8 +306,8 @@ export class TrafficSignalSystem {
     this.signals.get('N')!.leftTurnState = 'red';
     this.signals.get('S')!.leftTurnState = 'red';
     
-    this.signals.get('E')!.timer = 15;
-    this.signals.get('W')!.timer = 15;
+    this.signals.get('E')!.timer = 25;
+    this.signals.get('W')!.timer = 25;
   }
   
   private setEastWestYellow() {

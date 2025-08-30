@@ -27,8 +27,8 @@ export class DynamicParkingManager {
   // 레이아웃 상수
   private readonly LAYOUT = {
     mainRoad: { x: 700, width: 200, laneWidth: 25 },
-    crossRoad: { y: 200, height: 100, laneWidth: 25 },
-    intersection: { x: 700, y: 200, width: 200, height: 100 }
+    crossRoad: { y: 175, height: 150, laneWidth: 25 },
+    intersection: { x: 700, y: 175, width: 200, height: 150 }
   };
   
   // 주차 가능 구역 정의
@@ -53,24 +53,24 @@ export class DynamicParkingManager {
       lane: 0,
       priority: 1
     },
-    // 동쪽 도로 상단 (차선 0)
+    // 동쪽 도로 하단 (차선 5 - 최우측 차선)
     { 
-      id: 'east-top',
+      id: 'east-bottom',
       xStart: this.LAYOUT.intersection.x + this.LAYOUT.intersection.width + 60,
       xEnd: 1500,
-      y: this.LAYOUT.crossRoad.y + 5,
+      y: this.LAYOUT.crossRoad.y + 5 * this.LAYOUT.crossRoad.laneWidth + 5,
       direction: 'E' as const,
-      lane: 0,
+      lane: 5,
       priority: 2
     },
-    // 서쪽 도로 하단 (차선 1)
+    // 서쪽 도로 상단 (차선 0 - 최우측 차선)
     { 
-      id: 'west-bottom',
+      id: 'west-top',
       xStart: 100,
       xEnd: this.LAYOUT.intersection.x - 60,
-      y: this.LAYOUT.crossRoad.y + this.LAYOUT.crossRoad.height - 20,
+      y: this.LAYOUT.crossRoad.y + 5,
       direction: 'W' as const,
-      lane: 1,
+      lane: 0,
       priority: 2
     }
   ];
@@ -103,7 +103,7 @@ export class DynamicParkingManager {
     
     // 혼잡도 계산 (0-100)
     const maxVehiclesPerLane = 10;
-    const totalLanes = 12; // 남북 8개, 동서 4개
+    const totalLanes = 14; // 남북 8개, 동서 6개
     const maxCapacity = maxVehiclesPerLane * totalLanes;
     const congestionLevel = Math.min(100, (activeVehicles.length / maxCapacity) * 100);
     
@@ -278,7 +278,47 @@ export class DynamicParkingManager {
     }
   }
   
-  // 가장 가까운 빈 주차공간 찾기
+  // 가장 가까운 빈 주차공간 찾기 (방향 고려)
+  public findNearestAvailableSpotInDirection(x: number, y: number, direction: 'N' | 'S' | 'E' | 'W'): ParkingSpot | null {
+    let nearest: ParkingSpot | null = null;
+    let minDistance = Infinity;
+    
+    for (const spot of this.parkingSpots.values()) {
+      if (!spot.occupied) {
+        // 방향에 따라 진행 방향 앞쪽에 있는 주차 스팟만 고려
+        let isInFront = false;
+        
+        switch (direction) {
+          case 'N': // 북쪽으로 가는 차량은 현재 y보다 작은 y값 (위쪽)의 스팟만
+            isInFront = spot.y < y - 50; // 최소 50px 앞쪽
+            break;
+          case 'S': // 남쪽으로 가는 차량은 현재 y보다 큰 y값 (아래쪽)의 스팟만
+            isInFront = spot.y > y + 50;
+            break;
+          case 'E': // 동쪽으로 가는 차량은 현재 x보다 큰 x값 (오른쪽)의 스팟만
+            isInFront = spot.x > x + 50;
+            break;
+          case 'W': // 서쪽으로 가는 차량은 현재 x보다 작은 x값 (왼쪽)의 스팟만
+            isInFront = spot.x < x - 50;
+            break;
+        }
+        
+        if (isInFront) {
+          const distance = Math.sqrt(
+            Math.pow(spot.x - x, 2) + Math.pow(spot.y - y, 2)
+          );
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearest = spot;
+          }
+        }
+      }
+    }
+    
+    return minDistance < 200 ? nearest : null;
+  }
+
+  // 기존 메서드 (호환성 유지)
   public findNearestAvailableSpot(x: number, y: number): ParkingSpot | null {
     let nearest: ParkingSpot | null = null;
     let minDistance = Infinity;
