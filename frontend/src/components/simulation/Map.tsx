@@ -239,7 +239,8 @@ const Map: React.FC<MapProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full rounded-lg overflow-hidden">
+    <div className="relative w-full h-full p-4">
+      <div className="w-full h-full rounded-lg overflow-hidden">
       <MapboxMap
         ref={mapRef}
         {...viewState}
@@ -263,6 +264,7 @@ const Map: React.FC<MapProps> = ({
           <VehicleMarker
             key={vehicle.id}
             vehicle={vehicle}
+            mapRef={mapRef.current}
             onClick={() => onVehicleClick?.(vehicle)}
           />
         ))}
@@ -272,13 +274,15 @@ const Map: React.FC<MapProps> = ({
           <SlotMarker
             key={slot.id}
             slot={slot}
+            mapRef={mapRef.current}
             onClick={() => onSlotClick?.(slot)}
           />
         ))}
       </MapboxMap>
+      </div>
 
       {/* 지도 컨트롤 오버레이 */}
-      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+      <div className="absolute top-8 left-8 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-lg">
         <div className="flex flex-col space-y-2">
           <button
             onClick={showOverview}
@@ -303,7 +307,7 @@ const Map: React.FC<MapProps> = ({
       </div>
 
       {/* 실시간 통계 오버레이 */}
-      <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
+      <div className="absolute bottom-8 left-8 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
         <div className="text-sm space-y-1">
           <div className="font-semibold text-gray-800">실시간 현황</div>
           <div className="flex space-x-4 text-xs text-gray-600">
@@ -333,7 +337,7 @@ const Map: React.FC<MapProps> = ({
 
       {/* 데모 모드 또는 지도 에러 */}
       {(mapError || MAPBOX_TOKEN.includes('test') || MAPBOX_TOKEN.includes('your_mapbox_token')) && isMapLoaded && (
-        <div className="absolute inset-4 bg-gradient-to-br from-blue-50 to-green-50 rounded-lg flex flex-col items-center justify-center p-6">
+        <div className="absolute inset-8 bg-gradient-to-br from-blue-50 to-green-50 rounded-lg flex flex-col items-center justify-center p-6">
           <div className="bg-white/90 backdrop-blur-sm border border-gray-200 text-gray-800 px-6 py-4 rounded-xl shadow-lg max-w-lg text-center mb-6">
             <div className="text-4xl mb-3">🗺️</div>
             <div className="font-semibold mb-2">세종시 시뮬레이션 지도</div>
@@ -382,7 +386,7 @@ const Map: React.FC<MapProps> = ({
               </div>
               <div className="flex items-center">
                 <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
-                BRT 구간 (6개 정류장)
+                승하차구역 (6개 픽업존)
               </div>
               <div className="flex items-center">
                 <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
@@ -394,7 +398,7 @@ const Map: React.FC<MapProps> = ({
       )}
 
       {/* 지도 범례 */}
-      <div className="absolute top-4 right-20 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg text-xs">
+      <div className="absolute top-8 right-24 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg text-xs">
         <div className="font-semibold mb-2 text-gray-800">범례</div>
         
         <div className="space-y-1">

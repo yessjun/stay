@@ -1,7 +1,8 @@
 // 슬롯 마커 컴포넌트 - 지도 상의 정차 슬롯 표시 및 인터랙션
 
 import React, { useState } from 'react';
-import { Marker, Popup } from 'react-map-gl';
+import { Marker } from 'react-map-gl';
+import type { MapRef } from 'react-map-gl';
 import { motion } from 'framer-motion';
 import { ParkingSlot } from '@/types/slot';
 import { 
@@ -13,14 +14,16 @@ import {
   WrenchIcon as WrenchScrewdriverIcon,
   CheckIcon as CheckCircleIcon
 } from '@heroicons/react/24/outline';
+import CustomPopup from './CustomPopup';
 
 interface SlotMarkerProps {
   slot: ParkingSlot;
+  mapRef: MapRef | null;
   onClick?: () => void;
   onDoubleClick?: () => void;
 }
 
-const SlotMarker: React.FC<SlotMarkerProps> = ({ slot, onClick, onDoubleClick }) => {
+const SlotMarker: React.FC<SlotMarkerProps> = ({ slot, mapRef, onClick, onDoubleClick }) => {
   const [showPopup, setShowPopup] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -220,17 +223,15 @@ const SlotMarker: React.FC<SlotMarkerProps> = ({ slot, onClick, onDoubleClick })
         </motion.div>
       </Marker>
 
-      {/* 팝업 */}
-      {showPopup && (
-        <Popup
-          longitude={slot.position.lng}
-          latitude={slot.position.lat}
-          anchor="bottom"
-          onClose={() => setShowPopup(false)}
-          closeButton={true}
-          closeOnClick={false}
-          className="slot-popup"
-        >
+      {/* 커스텀 팝업 */}
+      <CustomPopup
+        position={slot.position}
+        isOpen={showPopup}
+        onClose={() => setShowPopup(false)}
+        mapRef={mapRef}
+        maxWidth="300px"
+        className="slot-popup"
+      >
           <div className="p-4 min-w-72">
             {/* 헤더 */}
             <div className="flex items-center justify-between mb-4">
@@ -411,8 +412,7 @@ const SlotMarker: React.FC<SlotMarkerProps> = ({ slot, onClick, onDoubleClick })
               </div>
             </div>
           </div>
-        </Popup>
-      )}
+        </CustomPopup>
     </>
   );
 };

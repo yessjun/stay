@@ -1,17 +1,20 @@
 // 차량 마커 컴포넌트 - 지도 상의 차량 표시 및 애니메이션
 
 import React, { useState } from 'react';
-import { Marker, Popup } from 'react-map-gl';
+import { Marker } from 'react-map-gl';
+import type { MapRef } from 'react-map-gl';
 import { motion } from 'framer-motion';
 import { Vehicle } from '@/types/vehicle';
 import { BoltIcon as BatteryIcon, UserIcon, ClockIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import CustomPopup from './CustomPopup';
 
 interface VehicleMarkerProps {
   vehicle: Vehicle;
+  mapRef: MapRef | null;
   onClick?: () => void;
 }
 
-const VehicleMarker: React.FC<VehicleMarkerProps> = ({ vehicle, onClick }) => {
+const VehicleMarker: React.FC<VehicleMarkerProps> = ({ vehicle, mapRef, onClick }) => {
   const [showPopup, setShowPopup] = useState(false);
 
   // 차량 상태에 따른 색상 및 아이콘 결정
@@ -161,131 +164,128 @@ const VehicleMarker: React.FC<VehicleMarkerProps> = ({ vehicle, onClick }) => {
         </motion.div>
       </Marker>
 
-      {/* 팝업 */}
-      {showPopup && (
-        <Popup
-          longitude={vehicle.position.lng}
-          latitude={vehicle.position.lat}
-          anchor="bottom"
-          onClose={() => setShowPopup(false)}
-          closeButton={true}
-          closeOnClick={false}
-          className="vehicle-popup"
-        >
-          <div className="p-3 min-w-64">
-            {/* 헤더 */}
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-sm mr-2"
-                  style={{ backgroundColor: vehicleStyle.color }}
-                >
-                  {vehicleStyle.icon}
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900">{vehicle.id}</div>
-                  <div className="text-xs text-gray-500">{vehicleStyle.label}</div>
-                </div>
+      {/* 커스텀 팝업 */}
+      <CustomPopup
+        position={vehicle.position}
+        isOpen={showPopup}
+        onClose={() => setShowPopup(false)}
+        mapRef={mapRef}
+        maxWidth="280px"
+        className="vehicle-popup"
+      >
+        <div className="p-3 min-w-64">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-sm mr-2"
+                style={{ backgroundColor: vehicleStyle.color }}
+              >
+                {vehicleStyle.icon}
               </div>
-              <div className={`px-2 py-1 rounded text-xs font-medium ${
-                vehicle.status === 'moving' ? 'bg-blue-100 text-blue-700' :
-                vehicle.status === 'idle' ? 'bg-gray-100 text-gray-700' :
-                'bg-orange-100 text-orange-700'
-              }`}>
-                {vehicleStyle.label}
+              <div>
+                <div className="font-semibold text-gray-900">{vehicle.id}</div>
+                <div className="text-xs text-gray-500">{vehicleStyle.label}</div>
               </div>
             </div>
-
-            {/* 상세 정보 */}
-            <div className="space-y-2">
-              {/* 배터리 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center text-sm text-gray-600">
-                  <BatteryIcon className="w-4 h-4 mr-1" />
-                  배터리
-                </div>
-                <div className="flex items-center">
-                  <div className="w-16 h-2 bg-gray-200 rounded-full mr-2">
-                    <div 
-                      className="h-2 rounded-full transition-all duration-300"
-                      style={{ 
-                        width: `${vehicle.battery}%`,
-                        backgroundColor: getBatteryColor(vehicle.battery)
-                      }}
-                    />
-                  </div>
-                  <span className="text-sm font-medium">{Math.round(vehicle.battery)}%</span>
-                </div>
-              </div>
-
-              {/* 속도 */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">속도</span>
-                <span className="text-sm font-medium">{Math.round(vehicle.speed)} km/h</span>
-              </div>
-
-              {/* 총 주행거리 */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">총 거리</span>
-                <span className="text-sm font-medium">{formatDistance(vehicle.totalDistance)}</span>
-              </div>
-
-              {/* 여행 횟수 */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">완료 여행</span>
-                <span className="text-sm font-medium">{vehicle.tripCount}회</span>
-              </div>
-
-              {/* 효율성 */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">효율성</span>
-                <span className={`text-sm font-bold px-2 py-1 rounded ${
-                  vehicle.efficiency >= 80 ? 'bg-green-100 text-green-700' :
-                  vehicle.efficiency >= 60 ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-red-100 text-red-700'
-                }`}>
-                  {getEfficiencyGrade(vehicle.efficiency)}
-                </span>
-              </div>
-            </div>
-
-            {/* 승객 정보 */}
-            {vehicle.passenger && (
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <div className="flex items-center text-sm text-orange-600">
-                  <UserIcon className="w-4 h-4 mr-1" />
-                  승객 탑승 중
-                </div>
-              </div>
-            )}
-
-            {/* 목적지 정보 */}
-            {vehicle.destination && (
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <div className="flex items-center text-sm text-blue-600 mb-1">
-                  <MapPinIcon className="w-4 h-4 mr-1" />
-                  목적지
-                </div>
-                <div className="text-xs text-gray-500 ml-5">
-                  위도: {vehicle.destination.lat.toFixed(4)}<br/>
-                  경도: {vehicle.destination.lng.toFixed(4)}
-                </div>
-              </div>
-            )}
-
-            {/* 마지막 업데이트 */}
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <div className="flex items-center">
-                  <ClockIcon className="w-3 h-3 mr-1" />
-                  마지막 업데이트
-                </div>
-                <span>{formatLastUpdate(vehicle.lastUpdate)}</span>
-              </div>
+            <div className={`px-2 py-1 rounded text-xs font-medium ${
+              vehicle.status === 'moving' ? 'bg-blue-100 text-blue-700' :
+              vehicle.status === 'idle' ? 'bg-gray-100 text-gray-700' :
+              'bg-orange-100 text-orange-700'
+            }`}>
+              {vehicleStyle.label}
             </div>
           </div>
-        </Popup>
-      )}
+
+          {/* 상세 정보 */}
+          <div className="space-y-2">
+            {/* 배터리 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center text-sm text-gray-600">
+                <BatteryIcon className="w-4 h-4 mr-1" />
+                배터리
+              </div>
+              <div className="flex items-center">
+                <div className="w-16 h-2 bg-gray-200 rounded-full mr-2">
+                  <div 
+                    className="h-2 rounded-full transition-all duration-300"
+                    style={{ 
+                      width: `${vehicle.battery}%`,
+                      backgroundColor: getBatteryColor(vehicle.battery)
+                    }}
+                  />
+                </div>
+                <span className="text-sm font-medium">{Math.round(vehicle.battery)}%</span>
+              </div>
+            </div>
+
+            {/* 속도 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">속도</span>
+              <span className="text-sm font-medium">{Math.round(vehicle.speed)} km/h</span>
+            </div>
+
+            {/* 총 주행거리 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">총 거리</span>
+              <span className="text-sm font-medium">{formatDistance(vehicle.totalDistance)}</span>
+            </div>
+
+            {/* 여행 횟수 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">완료 여행</span>
+              <span className="text-sm font-medium">{vehicle.tripCount}회</span>
+            </div>
+
+            {/* 효율성 */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">효율성</span>
+              <span className={`text-sm font-bold px-2 py-1 rounded ${
+                vehicle.efficiency >= 80 ? 'bg-green-100 text-green-700' :
+                vehicle.efficiency >= 60 ? 'bg-yellow-100 text-yellow-700' :
+                'bg-red-100 text-red-700'
+              }`}>
+                {getEfficiencyGrade(vehicle.efficiency)}
+              </span>
+            </div>
+          </div>
+
+          {/* 승객 정보 */}
+          {vehicle.passenger && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center text-sm text-orange-600">
+                <UserIcon className="w-4 h-4 mr-1" />
+                승객 탑승 중
+              </div>
+            </div>
+          )}
+
+          {/* 목적지 정보 */}
+          {vehicle.destination && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center text-sm text-blue-600 mb-1">
+                <MapPinIcon className="w-4 h-4 mr-1" />
+                목적지
+              </div>
+              <div className="text-xs text-gray-500 ml-5">
+                위도: {vehicle.destination.lat.toFixed(4)}<br/>
+                경도: {vehicle.destination.lng.toFixed(4)}
+              </div>
+            </div>
+          )}
+
+          {/* 마지막 업데이트 */}
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <div className="flex items-center">
+                <ClockIcon className="w-3 h-3 mr-1" />
+                마지막 업데이트
+              </div>
+              <span>{formatLastUpdate(vehicle.lastUpdate)}</span>
+            </div>
+          </div>
+        </div>
+      </CustomPopup>
     </>
   );
 };

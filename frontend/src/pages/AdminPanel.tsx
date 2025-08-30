@@ -33,7 +33,7 @@ const AdminPanel = () => {
     { id: 'government', name: '정부청사' },
     { id: 'residential', name: '주거지역' },
     { id: 'commercial', name: '상업지역' },
-    { id: 'brt', name: 'BRT 구간' }
+    { id: 'pickup', name: '승하차구역' }
   ];
 
   const handleEmergencyToggle = () => {
@@ -64,7 +64,7 @@ const AdminPanel = () => {
     { zone: '정부청사', vehicles: 24, utilization: 78, alerts: 2 },
     { zone: '주거지역', vehicles: 18, utilization: 65, alerts: 0 },
     { zone: '상업지역', vehicles: 15, utilization: 45, alerts: 1 },
-    { zone: 'BRT구간', vehicles: 12, utilization: 89, alerts: 3 },
+    { zone: '승하차구역', vehicles: 12, utilization: 89, alerts: 3 },
   ];
 
   return (
@@ -98,12 +98,12 @@ const AdminPanel = () => {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* 좌측 제어 패널 */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="lg:col-span-1 space-y-6"
+          className="lg:col-span-1 space-y-4"
         >
           {/* 지역 선택 */}
           <div className="bg-white rounded-xl shadow-card p-6">
@@ -267,48 +267,98 @@ const AdminPanel = () => {
             </div>
           </div>
 
-          {/* 슬롯 관리 인터페이스 */}
+          {/* 슬롯 통계 */}
           <div className="bg-white rounded-xl shadow-card p-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">동적 슬롯 관리</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <ChartBarIcon className="h-5 w-5 mr-2" />
+              슬롯 현황
+            </h3>
             
-            {/* 지도 플레이스홀더 */}
-            <div className="w-full h-64 bg-gradient-to-br from-blue-100 to-green-100 rounded-lg flex items-center justify-center mb-6">
-              <div className="text-center">
-                <div className="text-4xl mb-4">🗺️</div>
-                <p className="text-gray-600">드래그&드롭으로 슬롯 관리</p>
-                <p className="text-sm text-gray-500 mt-2">클릭하여 새 슬롯 생성</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-blue-600">{stats.slotStats.available}</div>
+                <div className="text-xs text-blue-600">사용 가능</div>
               </div>
-            </div>
-
-            {/* 슬롯 통계 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-blue-600">{stats.slotStats.available}</div>
-                <div className="text-sm text-blue-600">사용 가능</div>
+              <div className="bg-green-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-green-600">{stats.slotStats.occupied}</div>
+                <div className="text-xs text-green-600">사용 중</div>
               </div>
-              <div className="bg-green-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-green-600">{stats.slotStats.occupied}</div>
-                <div className="text-sm text-green-600">사용 중</div>
+              <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-yellow-600">{stats.slotStats.reserved}</div>
+                <div className="text-xs text-yellow-600">예약됨</div>
               </div>
-              <div className="bg-yellow-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-600">{stats.slotStats.reserved}</div>
-                <div className="text-sm text-yellow-600">예약됨</div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-gray-600">{stats.slotStats.disabled}</div>
-                <div className="text-sm text-gray-600">비활성화</div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-gray-600">{stats.slotStats.disabled}</div>
+                <div className="text-xs text-gray-600">비활성화</div>
               </div>
             </div>
           </div>
+        </motion.div>
 
-          {/* 실시간 알림 */}
-          <div className="bg-white rounded-xl shadow-card p-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-              <BellIcon className="h-6 w-6 mr-2" />
-              실시간 알림
-            </h3>
+        {/* 메인 지도 영역 (4/5) */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+          className="lg:col-span-4"
+        >
+          <div className="bg-white rounded-xl shadow-card p-4 h-[calc(100vh-200px)]">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">실시간 슬롯 관리</h2>
+              <div className="flex items-center space-x-4">
+                {/* 범례 */}
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <span className="text-sm text-gray-600">사용가능</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span className="text-sm text-gray-600">사용중</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <span className="text-sm text-gray-600">예약됨</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                  <span className="text-sm text-gray-600">
+                    {isRunning ? '실시간 업데이트' : '일시정지'}
+                  </span>
+                </div>
+              </div>
+            </div>
             
-            <div className="space-y-4 max-h-64 overflow-y-auto">
+            {/* 실제 지도 (최대 크기) */}
+            <div className="w-full h-[calc(100%-60px)] rounded-lg">
+              <Map
+                vehicles={vehicles}
+                slots={slots}
+                onVehicleClick={(vehicle) => console.log('Admin vehicle click:', vehicle.id)}
+                onSlotClick={handleSlotClick}
+                onMapClick={handleMapClick}
+                showTraffic={true}
+                show3D={true}
+                theme="light"
+              />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* 실시간 알림 */}
+      <div className="mt-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white rounded-xl shadow-card p-6"
+        >
+          <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+            <BellIcon className="h-6 w-6 mr-2" />
+            실시간 알림
+          </h3>
+          
+          <div className="space-y-4 max-h-64 overflow-y-auto">
               {isRunning ? (
                 <>
                   <div className="flex items-start space-x-3 p-4 bg-yellow-50 rounded-lg">
@@ -348,7 +398,6 @@ const AdminPanel = () => {
                 </div>
               )}
             </div>
-          </div>
         </motion.div>
       </div>
     </div>

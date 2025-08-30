@@ -7,7 +7,7 @@ import {
   SEJONG_CENTER, 
   GOVERNMENT_COMPLEX, 
   RESIDENTIAL_AREAS, 
-  BRT_STATIONS, 
+  PICKUP_ZONES, 
   COMMERCIAL_AREAS,
   ALL_LOCATIONS,
   TRAFFIC_PATTERNS 
@@ -92,12 +92,12 @@ export class SimulationEngine {
       this.slots.push(slot);
     }
 
-    // BRT 및 상업지역 슬롯 (30%)
+    // 승하차구역 및 상업지역 슬롯 (30%)
     const remaining = count - this.slots.length;
     for (let i = 0; i < remaining; i++) {
-      const baseLocation = [...BRT_STATIONS, ...COMMERCIAL_AREAS][i % (BRT_STATIONS.length + COMMERCIAL_AREAS.length)];
-      const slot = this.createSlot(`slot-mixed-${i}`, this.addRandomOffset(baseLocation), 
-        Math.random() > 0.5 ? 'dynamic' : 'static');
+      const baseLocation = [...PICKUP_ZONES, ...COMMERCIAL_AREAS][i % (PICKUP_ZONES.length + COMMERCIAL_AREAS.length)];
+      const slot = this.createSlot(`slot-pickup-${i}`, this.addRandomOffset(baseLocation), 
+        'dynamic'); // 승하차구역은 모두 동적 할당
       this.slots.push(slot);
     }
   }

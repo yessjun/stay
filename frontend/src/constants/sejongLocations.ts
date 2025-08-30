@@ -32,14 +32,14 @@ export const RESIDENTIAL_AREAS: Location[] = [
   { name: "고운동", lat: 36.4650, lng: 127.2980, type: "residential" },
 ];
 
-// BRT 정류장
-export const BRT_STATIONS: Location[] = [
-  { name: "정부세종청사북측", lat: 36.5060, lng: 127.2640, type: "brt" },
-  { name: "세종시청", lat: 36.4800, lng: 127.2890, type: "brt" },
-  { name: "한솔동주민센터", lat: 36.4780, lng: 127.2590, type: "brt" },
-  { name: "나성동주민센터", lat: 36.4870, lng: 127.2760, type: "brt" },
-  { name: "도담동주민센터", lat: 36.4940, lng: 127.2830, type: "brt" },
-  { name: "아름동주민센터", lat: 36.5120, lng: 127.2450, type: "brt" },
+// 승하차 구역 (환승 및 픽업존)
+export const PICKUP_ZONES: Location[] = [
+  { name: "정부청사 환승주차장", lat: 36.5055, lng: 127.2630, type: "pickup" },
+  { name: "세종시청 승하차구역", lat: 36.4795, lng: 127.2885, type: "pickup" },
+  { name: "한솔동 환승존", lat: 36.4775, lng: 127.2585, type: "pickup" },
+  { name: "나성동 픽업존", lat: 36.4865, lng: 127.2755, type: "pickup" },
+  { name: "도담동 승하차장", lat: 36.4935, lng: 127.2825, type: "pickup" },
+  { name: "아름동 환승구역", lat: 36.5115, lng: 127.2445, type: "pickup" },
 ];
 
 // 상업지역
@@ -63,7 +63,7 @@ export const MAJOR_ROADS = [
 export const ALL_LOCATIONS: Location[] = [
   ...GOVERNMENT_COMPLEX,
   ...RESIDENTIAL_AREAS,
-  ...BRT_STATIONS,
+  ...PICKUP_ZONES,
   ...COMMERCIAL_AREAS,
 ];
 

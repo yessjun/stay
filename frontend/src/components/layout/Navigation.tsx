@@ -8,10 +8,13 @@ import {
   PauseIcon 
 } from '@heroicons/react/24/outline';
 import { useSimulationStore } from '@/stores/simulationStore';
+import { useSimulation } from '@/hooks/useSimulation';
+import HeaderTimeControl from './HeaderTimeControl';
 
 const Navigation = () => {
   const location = useLocation();
   const { isRunning, toggleSimulation } = useSimulationStore();
+  const { currentTime, speed, changeSpeed, skipToTime } = useSimulation();
 
   const navItems = [
     {
@@ -36,6 +39,7 @@ const Navigation = () => {
 
   return (
     <nav className="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+      {/* 메인 네비게이션 바 */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* 로고 및 제목 */}
@@ -120,6 +124,19 @@ const Navigation = () => {
               </span>
             </div>
           </div>
+        </div>
+      </div>
+      
+      {/* 시간 제어 바 */}
+      <div className="bg-gray-50 border-t border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <HeaderTimeControl
+            currentTime={currentTime}
+            speed={speed}
+            isRunning={isRunning}
+            onSpeedChange={changeSpeed}
+            onTimeSkip={skipToTime}
+          />
         </div>
       </div>
     </nav>
