@@ -132,7 +132,7 @@ export const useSimulation = () => {
   }, []);
 
   // 속도 변경
-  const changeSpeed = useCallback((newSpeed: 1 | 2 | 5 | 10) => {
+  const changeSpeed = useCallback((newSpeed: 1 | 2 | 5 | 10 | 30) => {
     if (engineRef.current) {
       engineRef.current.setSpeed(newSpeed);
     }
@@ -147,18 +147,58 @@ export const useSimulation = () => {
     });
   }, [setStoreSpeed, addEvent]);
 
-  // 시간 스킵
-  const skipToTime = useCallback((hours: number) => {
-    skipTime(hours);
-    
+  // 시간 스킵 - 실제 시뮬레이션을 빠르게 실행
+  const skipToTime = useCallback(async (hours: number) => {
+    if (!engineRef.current) {
+      console.error('❌ SimulationEngine이 초기화되지 않음');
+      return;
+    }
+
+    // 빨리감기 시작 이벤트
     addEvent({
       type: 'user_action',
       timestamp: new Date(),
       severity: 'info',
-      title: '시간 이동',
-      description: `시뮬레이션 시간이 ${hours}시간 앞으로 이동되었습니다.`
+      title: '시간 빨리감기 시작',
+      description: `시뮬레이션을 ${hours}시간 빨리감기 중입니다...`
     });
-  }, [skipTime, addEvent]);
+
+    try {
+      // 빨리감기 실행
+      await engineRef.current.fastForward(hours, (currentTime, progress) => {
+        // 진행 상황 업데이트
+        updateCurrentTime(currentTime);
+        console.log(`⏩ 빨리감기 진행: ${Math.round(progress)}% - ${currentTime.toLocaleTimeString()}`);
+      });
+
+      // 빨리감기 완료 후 최종 상태 업데이트
+      if (vehicleManagerRef.current && slotManagerRef.current) {
+        updateVehicles(vehicleManagerRef.current.getAllVehicles());
+        updateSlots(slotManagerRef.current.getAllSlots());
+      }
+      
+      updateStats();
+
+      // 완료 이벤트
+      addEvent({
+        type: 'user_action',
+        timestamp: new Date(),
+        severity: 'info',
+        title: '시간 빨리감기 완료',
+        description: `${hours}시간 빨리감기가 완료되었습니다.`
+      });
+
+    } catch (error) {
+      console.error('빨리감기 오류:', error);
+      addEvent({
+        type: 'system_alert',
+        timestamp: new Date(),
+        severity: 'error',
+        title: '빨리감기 오류',
+        description: '시간 빨리감기 중 오류가 발생했습니다.'
+      });
+    }
+  }, [engineRef, vehicleManagerRef, slotManagerRef, updateCurrentTime, updateVehicles, updateSlots, updateStats, addEvent]);
 
   // 긴급 모드 활성화
   const activateEmergencyMode = useCallback(() => {

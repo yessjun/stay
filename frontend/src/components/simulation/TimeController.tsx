@@ -6,9 +6,9 @@ import { ClockIcon, ArrowRightIcon as ForwardIcon, PlayIcon } from '@heroicons/r
 
 interface TimeControllerProps {
   currentTime: Date;
-  speed: 1 | 2 | 5 | 10;
+  speed: 1 | 2 | 5 | 10 | 30;
   isRunning: boolean;
-  onSpeedChange: (speed: 1 | 2 | 5 | 10) => void;
+  onSpeedChange: (speed: 1 | 2 | 5 | 10 | 30) => void;
   onTimeSkip: (hours: number) => void;
 }
 
@@ -19,7 +19,7 @@ const TimeController: React.FC<TimeControllerProps> = ({
   onSpeedChange,
   onTimeSkip
 }) => {
-  const speedOptions = [1, 2, 5, 10] as const;
+  const speedOptions = [1, 2, 5, 10, 30] as const;
   const skipOptions = [
     { hours: 1, label: '+1시간' },
     { hours: 3, label: '+3시간' },
@@ -96,13 +96,13 @@ const TimeController: React.FC<TimeControllerProps> = ({
           </div>
         </div>
         
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           {speedOptions.map((speedOption) => (
             <motion.button
               key={speedOption}
               whileTap={{ scale: 0.95 }}
               onClick={() => onSpeedChange(speedOption)}
-              className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+              className={`py-2 px-2 rounded-lg text-sm font-medium transition-all ${
                 speed === speedOption
                   ? 'bg-sejong-blue text-white shadow-lg'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'

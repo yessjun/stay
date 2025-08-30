@@ -3,13 +3,11 @@ import { motion } from 'framer-motion';
 import { 
   ChartBarIcon, 
   CogIcon, 
-  PresentationChartBarIcon,
-  PlayIcon,
-  PauseIcon 
+  PresentationChartBarIcon
 } from '@heroicons/react/24/outline';
 import { useSimulationStore } from '@/stores/simulationStore';
 import { useSimulation } from '@/hooks/useSimulation';
-import HeaderTimeControl from './HeaderTimeControl';
+import CompactTimeControl from './CompactTimeControl';
 
 const Navigation = () => {
   const location = useLocation();
@@ -92,30 +90,17 @@ const Navigation = () => {
             })}
           </div>
 
-          {/* 시뮬레이션 제어 버튼 */}
-          <div className="flex items-center space-x-4">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={toggleSimulation}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
-                isRunning
-                  ? 'bg-alert-orange text-white hover:bg-orange-600'
-                  : 'bg-smart-green text-white hover:bg-green-600'
-              }`}
-            >
-              {isRunning ? (
-                <>
-                  <PauseIcon className="h-4 w-4" />
-                  <span>일시정지</span>
-                </>
-              ) : (
-                <>
-                  <PlayIcon className="h-4 w-4" />
-                  <span>시작</span>
-                </>
-              )}
-            </motion.button>
+          {/* 시뮬레이션 제어 영역 */}
+          <div className="flex items-center space-x-3">
+            {/* 컴팩트 시간 제어 (드롭다운에 시작/정지 포함) */}
+            <CompactTimeControl
+              currentTime={currentTime}
+              speed={speed}
+              isRunning={isRunning}
+              onSpeedChange={changeSpeed}
+              onTimeSkip={skipToTime}
+              onToggleSimulation={toggleSimulation}
+            />
             
             <div className="flex items-center space-x-2 text-sm">
               <div className={`w-2 h-2 rounded-full ${isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
@@ -124,19 +109,6 @@ const Navigation = () => {
               </span>
             </div>
           </div>
-        </div>
-      </div>
-      
-      {/* 시간 제어 바 */}
-      <div className="bg-gray-50 border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <HeaderTimeControl
-            currentTime={currentTime}
-            speed={speed}
-            isRunning={isRunning}
-            onSpeedChange={changeSpeed}
-            onTimeSkip={skipToTime}
-          />
         </div>
       </div>
     </nav>

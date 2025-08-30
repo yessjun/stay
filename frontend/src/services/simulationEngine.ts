@@ -154,6 +154,71 @@ export class SimulationEngine {
     this.updateCallback = null; // 콜백 정리
   }
 
+  // 빨리감기 - 목표 시간까지 시뮬레이션을 고속으로 실행
+  public async fastForward(targetHours: number, progressCallback?: (currentTime: Date, progress: number) => void): Promise<void> {
+    const startTime = new Date(this.currentTime);
+    const endTime = new Date(startTime.getTime() + targetHours * 60 * 60 * 1000);
+    const totalDuration = endTime.getTime() - startTime.getTime();
+    
+    console.log(`⚡ 빨리감기 시작: ${startTime.toLocaleTimeString()} → ${endTime.toLocaleTimeString()}`);
+
+    // 빨리감기 중에는 기존 인터벌 중지
+    const wasRunning = this.isRunning;
+    const originalCallback = this.updateCallback;
+    if (this.isRunning) {
+      this.isRunning = false;
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+      }
+    }
+
+    // 5분씩 청크 단위로 처리 (메모리 최적화)
+    const chunkSize = 5 * 60 * 1000; // 5분
+    let currentChunkTime = new Date(startTime);
+
+    while (currentChunkTime < endTime) {
+      const chunkEndTime = new Date(Math.min(currentChunkTime.getTime() + chunkSize, endTime.getTime()));
+      
+      // 청크 내에서는 1초씩 빠르게 처리
+      while (currentChunkTime < chunkEndTime) {
+        this.currentTime = new Date(currentChunkTime);
+        this.update();
+        currentChunkTime = new Date(currentChunkTime.getTime() + 1000); // 1초씩 증가
+      }
+
+      // 진행 상황 업데이트
+      const progress = ((currentChunkTime.getTime() - startTime.getTime()) / totalDuration) * 100;
+      if (progressCallback) {
+        progressCallback(new Date(currentChunkTime), progress);
+      }
+
+      // UI 스레드에 제어권 양보 (청크 처리 후)
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    // 최종 시간 설정
+    this.currentTime = new Date(endTime);
+    
+    // 최종 업데이트
+    if (originalCallback) {
+      originalCallback({
+        vehicles: this.vehicles,
+        slots: this.slots,
+        events: [],
+        currentTime: this.currentTime
+      });
+    }
+
+    // 원래 실행 상태였다면 다시 시작
+    if (wasRunning && originalCallback) {
+      this.updateCallback = originalCallback;
+      this.start(originalCallback);
+    }
+
+    console.log(`✅ 빨리감기 완료: ${this.currentTime.toLocaleTimeString()}`);
+  }
+
   // 속도 설정
   public setSpeed(speed: number): void {
     this.speed = speed;

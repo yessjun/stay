@@ -3,7 +3,7 @@
 import { Vehicle, VehicleEvent, VehicleStats } from './vehicle';
 import { ParkingSlot, SlotEvent, SlotStats } from './slot';
 
-export type SimulationSpeed = 1 | 2 | 5 | 10;
+export type SimulationSpeed = 1 | 2 | 5 | 10 | 30;
 
 export interface SimulationState {
   currentTime: Date;
