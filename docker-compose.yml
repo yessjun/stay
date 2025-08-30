@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_MAPBOX_TOKEN=pk.eyJ1Ijoid25zMTgyNiIsImEiOiJjbWV4a212eWoxN2lyMmxvczgwdnY1aTRoIn0.VUxosMYG3HaN_lI0sds1cQ
+    stdin_open: true
+    tty: true
+    networks:
+      - stay-network
+
+networks:
+  stay-network:
+    driver: bridge
