@@ -1,11 +1,9 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSimulation } from '@/hooks/useSimulation';
-import { useSimulationStore } from '@/stores/simulationStore';
 import { Vehicle, Coordinate } from '@/types/vehicle';
 import { ParkingSlot } from '@/types/slot';
 import CrossroadSimulator from '@/components/simulation/CrossroadSimulator';
-import { SEJONG_CENTER } from '@/constants/sejongLocations';
 
 const SimulationDashboard = () => {
   const { 
@@ -15,29 +13,9 @@ const SimulationDashboard = () => {
     vehicles,
     slots
   } = useSimulation();
-  const { stats } = useSimulationStore();
   
-  const mapRef = useRef<any>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
-  const [mapTheme, setMapTheme] = useState<'light' | 'dark'>('light');
-
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'long',
-    });
-  };
 
   // 차량 클릭 핸들러
   const handleVehicleClick = useCallback((vehicle: Vehicle) => {
@@ -53,12 +31,6 @@ const SimulationDashboard = () => {
     console.log('Slot clicked:', slot.id);
   }, []);
 
-  // 지도 클릭 핸들러
-  const handleMapClick = useCallback((coordinate: Coordinate) => {
-    setSelectedVehicle(null);
-    setSelectedSlot(null);
-    console.log('Map clicked at:', coordinate);
-  }, []);
 
   // 정보 패널 닫기
   const handleCloseInfoPanel = useCallback(() => {
@@ -195,39 +167,13 @@ const SimulationDashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 헤더 섹션 */}
+    <div className="min-h-screen bg-gray-50">
+      <div className="w-full h-screen">
+        {/* 메인 지도 영역 - 전체 화면 */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">시뮬레이션 대시보드</h1>
-              <p className="mt-2 text-gray-600">세종시 자율주행 공유차량 실시간 모니터링</p>
-            </div>
-            
-            <div className="text-right">
-              <div className="text-2xl font-mono font-bold text-sejong-blue">
-                {formatTime(currentTime)}
-              </div>
-              <div className="text-sm text-gray-500">
-                {formatDate(currentTime)} (x{speed})
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-
-        {/* 메인 지도 영역 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl shadow-card overflow-hidden relative"
-          style={{ height: 'calc(100vh - 200px)' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-white w-full h-full relative"
         >
 
           {/* 교차로 시뮬레이션 뷰 */}

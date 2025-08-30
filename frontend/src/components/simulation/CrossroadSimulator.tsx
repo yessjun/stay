@@ -5,6 +5,7 @@ import { TrafficSignalSystem } from './systems/TrafficSignalSystem';
 import { VehicleAISystem } from './systems/VehicleAISystem';
 import { ParkingOrchestrator } from './systems/ParkingOrchestrator';
 import { CongestionAnalyzer } from './systems/CongestionAnalyzer';
+import { DynamicParkingManager } from './systems/DynamicParkingManager';
 
 interface CrossroadSimulatorProps {
   currentTime: Date;
@@ -58,10 +59,10 @@ interface ParkingSpot {
   y: number;
   width: number;
   height: number;
-  roadSide: 'main-west' | 'main-east' | 'cross-north' | 'cross-south';
-  lane: number;
+  direction: 'N' | 'S' | 'E' | 'W';
   occupied: boolean;
   vehicleId?: string;
+  priority?: number;
 }
 
 const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
@@ -76,10 +77,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
 }) => {
   // 레이아웃 상수
   const LAYOUT = {
-    width: 1200,
+    width: 1600,  // 너비 확대
     height: 1000,
     mainRoad: {
-      x: 500,
+      x: 700,  // 중앙 위치 조정
       width: 200,
       lanes: 8,
       laneWidth: 25
@@ -91,7 +92,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
       laneWidth: 25
     },
     intersection: {
-      x: 500,
+      x: 700,  // 중앙 위치 조정
       y: 200,
       width: 200,
       height: 100
@@ -109,6 +110,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
   const vehicleAIRef = useRef<VehicleAISystem>();
   const parkingOrchestratorRef = useRef<ParkingOrchestrator>();
   const congestionAnalyzerRef = useRef<CongestionAnalyzer>();
+  const parkingManagerRef = useRef<DynamicParkingManager>();
   const lastUpdateRef = useRef<number>(Date.now());
   const vehicleCounterRef = useRef<number>(100); // 100부터 시작하여 중복 방지
 
@@ -119,48 +121,19 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
     vehicleAIRef.current = new VehicleAISystem();
     parkingOrchestratorRef.current = new ParkingOrchestrator();
     congestionAnalyzerRef.current = new CongestionAnalyzer();
+    parkingManagerRef.current = new DynamicParkingManager();
 
     // 신호등 초기화 (교차로 각 모서리에 균일하게 배치)
     const initialSignals: Signal[] = [
-      { id: 'N', direction: 'N', state: 'green', leftTurnState: 'red', timer: 20, x: 460, y: 100 },  // 북쪽 신호 (왼쪽 위)
-      { id: 'S', direction: 'S', state: 'green', leftTurnState: 'red', timer: 20, x: 715, y: 315 },  // 남쪽 신호 (오른쪽 아래)
-      { id: 'E', direction: 'E', state: 'red', leftTurnState: 'red', timer: 20, x: 715, y: 100 },     // 동쪽 신호 (오른쪽 위)
-      { id: 'W', direction: 'W', state: 'red', leftTurnState: 'red', timer: 20, x: 460, y: 315 }      // 서쪽 신호 (왼쪽 아래)
+      { id: 'N', direction: 'N', state: 'green', leftTurnState: 'red', timer: 20, x: 660, y: 100 },  // 북쪽 신호 (왼쪽 위)
+      { id: 'S', direction: 'S', state: 'green', leftTurnState: 'red', timer: 20, x: 915, y: 315 },  // 남쪽 신호 (오른쪽 아래)
+      { id: 'E', direction: 'E', state: 'red', leftTurnState: 'red', timer: 20, x: 915, y: 100 },     // 동쪽 신호 (오른쪽 위)
+      { id: 'W', direction: 'W', state: 'red', leftTurnState: 'red', timer: 20, x: 660, y: 315 }      // 서쪽 신호 (왼쪽 아래)
     ];
     setSignals(initialSignals);
 
-    // 정차공간 초기화 (도로 갓길)
-    const initialParkingSpots: ParkingSpot[] = [];
-    
-    // 메인 도로 서쪽 갓길 (최우측 차선)
-    for (let i = 0; i < 8; i++) {
-      initialParkingSpots.push({
-        id: `main-west-${i}`,
-        x: LAYOUT.mainRoad.x + 7 * LAYOUT.mainRoad.laneWidth,
-        y: 350 + i * 80,
-        width: LAYOUT.mainRoad.laneWidth,
-        height: 60,
-        roadSide: 'main-west',
-        lane: 7, // 최우측 차선
-        occupied: false
-      });
-    }
-    
-    // 메인 도로 동쪽 갓길 (최우측 차선)
-    for (let i = 0; i < 8; i++) {
-      initialParkingSpots.push({
-        id: `main-east-${i}`,
-        x: LAYOUT.mainRoad.x,
-        y: 350 + i * 80,
-        width: LAYOUT.mainRoad.laneWidth,
-        height: 60,
-        roadSide: 'main-east',
-        lane: 0, // 최우측 차선
-        occupied: false
-      });
-    }
-    
-    setParkingSpots(initialParkingSpots);
+    // 정차공간 초기화 (비어있는 상태로 시작 - 동적 할당)
+    setParkingSpots([]);
 
     // 초기 차량 생성 (간격을 두고 배치)
     const initialVehicles: SimVehicle[] = [];
@@ -173,14 +146,14 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
       
       if (direction === 'N') {
         // 북쪽으로 향하는 차량 (남쪽에서 시작, 우측 차선)
-        const lanes = [4, 5, 6];
+        const lanes = [4, 5, 6, 7]; // 모든 우측 차선 사용 가능
         lane = lanes[i % lanes.length];
         x = LAYOUT.mainRoad.x + lane * LAYOUT.mainRoad.laneWidth + 12;
         y = LAYOUT.height - 100 - (i * 150); // 간격 증가
         angle = 0;
       } else {
         // 남쪽으로 향하는 차량 (북쪽에서 시작, 우측 차선)
-        const lanes = [1, 2, 3];
+        const lanes = [0, 1, 2, 3]; // 모든 우측 차선 사용 가능
         lane = lanes[i % lanes.length];
         x = LAYOUT.mainRoad.x + lane * LAYOUT.mainRoad.laneWidth + 12;
         y = 100 + (i * 150); // 간격 증가
@@ -211,14 +184,14 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
       let x, y, angle, lane;
       
       if (direction === 'E') {
-        // 동쪽으로 향하는 차량
-        lane = (i - 10) % 2;
+        // 동쪽으로 향하는 차량 (우측통행 - 아래쪽 2개 차선 사용)
+        lane = 2 + ((i - 10) % 2);
         x = 100 + ((i - 10) * 200); // 간격 증가
         y = LAYOUT.crossRoad.y + lane * LAYOUT.crossRoad.laneWidth + 12;
         angle = 90;
       } else {
-        // 서쪽으로 향하는 차량
-        lane = 2 + ((i - 10) % 2);
+        // 서쪽으로 향하는 차량 (우측통행 - 위쪽 2개 차선 사용)
+        lane = (i - 10) % 2;
         x = LAYOUT.width - 100 - ((i - 10) * 200); // 간격 증가
         y = LAYOUT.crossRoad.y + lane * LAYOUT.crossRoad.laneWidth + 12;
         angle = 270;
@@ -314,15 +287,15 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             direction = Math.random() < 0.5 ? 'N' : 'S';
             
             if (direction === 'N') {
-              // 북쪽으로 가는 차량 (남쪽에서 시작) - 우측 3개 차선 사용
-              const laneOptions = [4, 5, 6]; // 차선 4, 5, 6 (7번은 정차공간)
+              // 북쪽으로 가는 차량 (남쪽에서 시작) - 모든 우측 차선 사용
+              const laneOptions = [4, 5, 6, 7]; // 모든 차선 사용 가능
               lane = laneOptions[Math.floor(Math.random() * laneOptions.length)];
               x = LAYOUT.mainRoad.x + lane * LAYOUT.mainRoad.laneWidth + 12;
               y = LAYOUT.height + 50 + Math.random() * 100; // 시작 위치 다양화
               angle = 0;
             } else {
-              // 남쪽으로 가는 차량 (북쪽에서 시작) - 좌측 3개 차선 사용
-              const laneOptions = [1, 2, 3]; // 차선 1, 2, 3 (0번은 정차공간)
+              // 남쪽으로 가는 차량 (북쪽에서 시작) - 모든 우측 차선 사용
+              const laneOptions = [0, 1, 2, 3]; // 모든 차선 사용 가능
               lane = laneOptions[Math.floor(Math.random() * laneOptions.length)];
               x = LAYOUT.mainRoad.x + lane * LAYOUT.mainRoad.laneWidth + 12;
               y = -50 - Math.random() * 100; // 시작 위치 다양화
@@ -333,15 +306,15 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             direction = Math.random() < 0.5 ? 'E' : 'W';
             
             if (direction === 'E') {
-              // 동쪽으로 가는 차량 (서쪽에서 시작) - 상단 2개 차선
-              const laneOptions = [0, 1];
+              // 동쪽으로 가는 차량 (서쪽에서 시작) - 우측통행: 아래쪽 2개 차선
+              const laneOptions = [2, 3];
               lane = laneOptions[Math.floor(Math.random() * laneOptions.length)];
               x = -50 - Math.random() * 100; // 시작 위치 다양화
               y = LAYOUT.crossRoad.y + lane * LAYOUT.crossRoad.laneWidth + 12;
               angle = 90;
             } else {
-              // 서쪽으로 가는 차량 (동쪽에서 시작) - 하단 2개 차선
-              const laneOptions = [2, 3];
+              // 서쪽으로 가는 차량 (동쪽에서 시작) - 우측통행: 위쪽 2개 차선
+              const laneOptions = [0, 1];
               lane = laneOptions[Math.floor(Math.random() * laneOptions.length)];
               x = LAYOUT.width + 50 + Math.random() * 100; // 시작 위치 다양화
               y = LAYOUT.crossRoad.y + lane * LAYOUT.crossRoad.laneWidth + 12;
@@ -384,7 +357,7 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
               lane,
               isParked: false,
               waitingForSignal: false,
-              turningDirection: Math.random() < 0.75 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right',
+              turningDirection: Math.random() < 0.6 ? 'straight' : Math.random() < 0.5 ? 'left' : 'right',
               distanceToFront: 100,
               color: colors[Math.floor(Math.random() * colors.length)]
             });
@@ -802,8 +775,26 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
               }
             }
             
-            // 안전한 경우에만 회전
-            if (canTurn && updated.turningDirection === 'left') {
+            // 회전 처리 (올바른 차선에서만 회전 가능)
+            let canMakeTurn = false;
+            
+            // 좌회전은 가장 왼쪽 차선에서만
+            if (updated.turningDirection === 'left') {
+              if (updated.direction === 'N' && updated.lane === 4) canMakeTurn = true; // 북쪽 방향 최좌측
+              else if (updated.direction === 'S' && updated.lane === 3) canMakeTurn = true; // 남쪽 방향 최좌측
+              else if (updated.direction === 'E' && updated.lane === 2) canMakeTurn = true; // 동쪽 방향 최좌측
+              else if (updated.direction === 'W' && updated.lane === 1) canMakeTurn = true; // 서쪽 방향 최좌측
+            }
+            // 우회전은 가장 오른쪽 차선에서만
+            else if (updated.turningDirection === 'right') {
+              if (updated.direction === 'N' && updated.lane === 7) canMakeTurn = true; // 북쪽 방향 최우측
+              else if (updated.direction === 'S' && updated.lane === 0) canMakeTurn = true; // 남쪽 방향 최우측
+              else if (updated.direction === 'E' && updated.lane === 3) canMakeTurn = true; // 동쪽 방향 최우측
+              else if (updated.direction === 'W' && updated.lane === 0) canMakeTurn = true; // 서쪽 방향 최우측
+            }
+            
+            // 회전 가능한 차선에서만 회전 처리
+            if (updated.turningDirection === 'left' && canMakeTurn && (canTurn || updated.speed < 20)) {
               if (updated.direction === 'N' && updated.y < intersectionCenterY) {
                 // 북쪽에서 왼쪽으로 (0 -> 270)
                 updated.angle = (updated.angle - 2 + 360) % 360;
@@ -811,6 +802,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 270;
                   updated.direction = 'W';
                   updated.turningDirection = 'straight'; // 회전 완료
+                  // 서쪽 방향 우측통행 차선으로 진입 (차선 0 또는 1)
+                  updated.lane = 1;
+                  updated.x = intersectionCenterX - 50;
+                  updated.y = LAYOUT.crossRoad.y + updated.lane * LAYOUT.crossRoad.laneWidth + 12;
                 }
               } else if (updated.direction === 'S' && updated.y > intersectionCenterY) {
                 // 남쪽에서 왼쪽으로 (180 -> 90)
@@ -819,6 +814,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 90;
                   updated.direction = 'E';
                   updated.turningDirection = 'straight';
+                  // 동쪽 방향 우측통행 차선으로 진입 (차선 2 또는 3)
+                  updated.lane = 2;
+                  updated.x = intersectionCenterX + 50;
+                  updated.y = LAYOUT.crossRoad.y + updated.lane * LAYOUT.crossRoad.laneWidth + 12;
                 }
               } else if (updated.direction === 'E' && updated.x > intersectionCenterX) {
                 // 동쪽에서 왼쪽으로 (90 -> 0)
@@ -827,6 +826,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 0;
                   updated.direction = 'N';
                   updated.turningDirection = 'straight';
+                  // 북쪽 방향 우측통행 차선으로 진입 (차선 4, 5, 6)
+                  updated.lane = 5;
+                  updated.x = LAYOUT.mainRoad.x + updated.lane * LAYOUT.mainRoad.laneWidth + 12;
+                  updated.y = intersectionCenterY - 50;
                 }
               } else if (updated.direction === 'W' && updated.x < intersectionCenterX) {
                 // 서쪽에서 왼쪽으로 (270 -> 180)
@@ -835,9 +838,13 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 180;
                   updated.direction = 'S';
                   updated.turningDirection = 'straight';
+                  // 남쪽 방향 우측통행 차선으로 진입 (차선 1, 2, 3)
+                  updated.lane = 2;
+                  updated.x = LAYOUT.mainRoad.x + updated.lane * LAYOUT.mainRoad.laneWidth + 12;
+                  updated.y = intersectionCenterY + 50;
                 }
               }
-            } else if (canTurn && updated.turningDirection === 'right') {
+            } else if (updated.turningDirection === 'right' && canMakeTurn && (canTurn || updated.speed < 20)) {
               if (updated.direction === 'N' && updated.y < intersectionCenterY) {
                 // 북쪽에서 오른쪽으로 (0 -> 90)
                 updated.angle = (updated.angle + 2) % 360;
@@ -845,6 +852,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 90;
                   updated.direction = 'E';
                   updated.turningDirection = 'straight';
+                  // 동쪽 방향 우측통행 차선으로 진입 (차선 2 또는 3)
+                  updated.lane = 3;
+                  updated.x = intersectionCenterX + 50;
+                  updated.y = LAYOUT.crossRoad.y + updated.lane * LAYOUT.crossRoad.laneWidth + 12;
                 }
               } else if (updated.direction === 'S' && updated.y > intersectionCenterY) {
                 // 남쪽에서 오른쪽으로 (180 -> 270)
@@ -853,6 +864,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 270;
                   updated.direction = 'W';
                   updated.turningDirection = 'straight';
+                  // 서쪽 방향 우측통행 차선으로 진입 (차선 0 또는 1)
+                  updated.lane = 0;
+                  updated.x = intersectionCenterX - 50;
+                  updated.y = LAYOUT.crossRoad.y + updated.lane * LAYOUT.crossRoad.laneWidth + 12;
                 }
               } else if (updated.direction === 'E' && updated.x > intersectionCenterX) {
                 // 동쪽에서 오른쪽으로 (90 -> 180)
@@ -861,6 +876,10 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 180;
                   updated.direction = 'S';
                   updated.turningDirection = 'straight';
+                  // 남쪽 방향 우측통행 차선으로 진입 (차선 1, 2, 3)
+                  updated.lane = 3;
+                  updated.x = LAYOUT.mainRoad.x + updated.lane * LAYOUT.mainRoad.laneWidth + 12;
+                  updated.y = intersectionCenterY + 50;
                 }
               } else if (updated.direction === 'W' && updated.x < intersectionCenterX) {
                 // 서쪽에서 오른쪽으로 (270 -> 0/360)
@@ -869,6 +888,150 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
                   updated.angle = 0;
                   updated.direction = 'N';
                   updated.turningDirection = 'straight';
+                  // 북쪽 방향 우측통행 차선으로 진입 (차선 4, 5, 6)
+                  updated.lane = 6;
+                  updated.x = LAYOUT.mainRoad.x + updated.lane * LAYOUT.mainRoad.laneWidth + 12;
+                  updated.y = intersectionCenterY - 50;
+                }
+              }
+            }
+          }
+          
+          // 차선 변경 로직 (교차로 밖에서만)
+          if (!inIntersection && !updated.waitingForSignal) {
+            // 차선 변경 필요성 판단
+            let shouldChangeLane = false;
+            let targetLane = updated.lane;
+            
+            // 교차로 접근 시 회전을 위한 차선 변경 (우선순위 높음)
+            const distanceToIntersection = Math.min(
+              Math.abs(updated.y - (LAYOUT.intersection.y + LAYOUT.intersection.height)),
+              Math.abs(updated.y - LAYOUT.intersection.y),
+              Math.abs(updated.x - (LAYOUT.intersection.x + LAYOUT.intersection.width)),
+              Math.abs(updated.x - LAYOUT.intersection.x)
+            );
+            
+            if (distanceToIntersection < 150) {
+              // 좌회전 예정인데 좌회전 차선이 아닌 경우
+              if (updated.turningDirection === 'left') {
+                if (updated.direction === 'N' && updated.lane !== 4) {
+                  targetLane = 4;
+                  shouldChangeLane = true;
+                } else if (updated.direction === 'S' && updated.lane !== 3) {
+                  targetLane = 3;
+                  shouldChangeLane = true;
+                } else if (updated.direction === 'E' && updated.lane !== 2) {
+                  targetLane = 2;
+                  shouldChangeLane = true;
+                } else if (updated.direction === 'W' && updated.lane !== 1) {
+                  targetLane = 1;
+                  shouldChangeLane = true;
+                }
+              }
+              // 우회전 예정인데 우회전 차선이 아닌 경우
+              else if (updated.turningDirection === 'right') {
+                if (updated.direction === 'N' && updated.lane !== 7) {
+                  targetLane = 7;
+                  shouldChangeLane = true;
+                } else if (updated.direction === 'S' && updated.lane !== 0) {
+                  targetLane = 0;
+                  shouldChangeLane = true;
+                } else if (updated.direction === 'E' && updated.lane !== 3) {
+                  targetLane = 3;
+                  shouldChangeLane = true;
+                } else if (updated.direction === 'W' && updated.lane !== 0) {
+                  targetLane = 0;
+                  shouldChangeLane = true;
+                }
+              }
+            }
+            
+            // 일반적인 차선 변경 (앞차가 너무 느리거나 가까운 경우)
+            if (!shouldChangeLane && Math.random() < 0.005) {
+              if (updated.distanceToFront < 60 && frontVehicle && frontVehicle.speed < updated.speed * 0.7) {
+                shouldChangeLane = true;
+              }
+            }
+            
+            if (shouldChangeLane) {
+              // 목표 차선이 정해지지 않았으면 가능한 차선 확인
+              if (targetLane === updated.lane) {
+                const possibleLanes = [];
+                
+                if (updated.direction === 'N') {
+                  // 북쪽 방향 - 차선 4, 5, 6, 7 사용
+                  if (updated.lane > 4) possibleLanes.push(updated.lane - 1);
+                  if (updated.lane < 7) possibleLanes.push(updated.lane + 1);
+                } else if (updated.direction === 'S') {
+                  // 남쪽 방향 - 차선 0, 1, 2, 3 사용
+                  if (updated.lane > 0) possibleLanes.push(updated.lane - 1);
+                  if (updated.lane < 3) possibleLanes.push(updated.lane + 1);
+                } else if (updated.direction === 'E') {
+                  // 동쪽 방향 - 차선 2, 3 사용
+                  if (updated.lane > 2) possibleLanes.push(updated.lane - 1);
+                  if (updated.lane < 3) possibleLanes.push(updated.lane + 1);
+                } else if (updated.direction === 'W') {
+                  // 서쪽 방향 - 차선 0, 1 사용
+                  if (updated.lane > 0) possibleLanes.push(updated.lane - 1);
+                  if (updated.lane < 1) possibleLanes.push(updated.lane + 1);
+                }
+                
+                if (possibleLanes.length > 0) {
+                  targetLane = possibleLanes[Math.floor(Math.random() * possibleLanes.length)];
+                }
+              }
+              
+              // 목표 차선의 안전성 확인
+              let isSafe = true;
+              const checkX = updated.direction === 'N' || updated.direction === 'S' 
+                ? LAYOUT.mainRoad.x + targetLane * LAYOUT.mainRoad.laneWidth + 12
+                : updated.x;
+              const checkY = updated.direction === 'E' || updated.direction === 'W'
+                ? LAYOUT.crossRoad.y + targetLane * LAYOUT.crossRoad.laneWidth + 12
+                : updated.y;
+              
+              newVehicles.forEach(other => {
+                if (other.id === vehicle.id || other.isParked) return;
+                
+                const dx = Math.abs(other.x - checkX);
+                const dy = Math.abs(other.y - checkY);
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 목표 차선에 너무 가까운 차량이 있으면 안전하지 않음
+                if (distance < 50) {
+                  isSafe = false;
+                }
+              });
+              
+              if (!isSafe) {
+                // 안전하지 않으면 차선 변경 취소
+                targetLane = updated.lane;
+              }
+              
+              // 차선 변경 실행
+              if (targetLane !== updated.lane) {
+                const laneChangeSpeed = 2 * deltaTime;
+                
+                if (updated.direction === 'N' || updated.direction === 'S') {
+                  const targetX = LAYOUT.mainRoad.x + targetLane * LAYOUT.mainRoad.laneWidth + 12;
+                  const xDiff = targetX - updated.x;
+                  
+                  if (Math.abs(xDiff) > 2) {
+                    updated.x += Math.sign(xDiff) * Math.min(laneChangeSpeed * 50, Math.abs(xDiff));
+                  } else {
+                    updated.x = targetX;
+                    updated.lane = targetLane;
+                  }
+                } else {
+                  const targetY = LAYOUT.crossRoad.y + targetLane * LAYOUT.crossRoad.laneWidth + 12;
+                  const yDiff = targetY - updated.y;
+                  
+                  if (Math.abs(yDiff) > 2) {
+                    updated.y += Math.sign(yDiff) * Math.min(laneChangeSpeed * 50, Math.abs(yDiff));
+                  } else {
+                    updated.y = targetY;
+                    updated.lane = targetLane;
+                  }
                 }
               }
             }
@@ -1007,37 +1170,24 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
           }
           
           // 주차 로직 (확률적으로)
-          if (Math.random() < 0.001 && !updated.isParked) {
-            const availableSpots = parkingSpots.filter(spot => !spot.occupied);
-            if (availableSpots.length > 0) {
-              // 가장 가까운 빈 자리 찾기
-              let nearestSpot = availableSpots[0];
-              let minDistance = Infinity;
+          if (Math.random() < 0.001 && !updated.isParked && parkingManagerRef.current) {
+            const nearestSpot = parkingManagerRef.current.findNearestAvailableSpot(updated.x, updated.y);
+            if (nearestSpot) {
+              updated.x = nearestSpot.x + 7;
+              updated.y = nearestSpot.y + 12;
+              updated.speed = 0;
+              updated.isParked = true;
+              updated.parkingSlotId = nearestSpot.id;
               
-              availableSpots.forEach(spot => {
-                const dist = Math.sqrt(
-                  Math.pow(spot.x - updated.x, 2) + 
-                  Math.pow(spot.y - updated.y, 2)
-                );
-                if (dist < minDistance) {
-                  minDistance = dist;
-                  nearestSpot = spot;
-                }
-              });
+              // 주차 매니저에 점유 상태 업데이트
+              parkingManagerRef.current.updateOccupancy(nearestSpot.id, true, updated.id);
               
-              if (minDistance < 200) {
-                updated.x = nearestSpot.x + 12;
-                updated.y = nearestSpot.y + 30;
-                updated.speed = 0;
-                updated.isParked = true;
-                updated.parkingSlotId = nearestSpot.id;
-                
-                setParkingSpots(prev => prev.map(spot => 
-                  spot.id === nearestSpot.id 
-                    ? { ...spot, occupied: true, vehicleId: updated.id }
-                    : spot
-                ));
-              }
+              // UI 업데이트를 위해 상태도 업데이트
+              setParkingSpots(prev => prev.map(spot => 
+                spot.id === nearestSpot.id 
+                  ? { ...spot, occupied: true, vehicleId: updated.id }
+                  : spot
+              ));
             }
           }
           
@@ -1046,6 +1196,12 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
             updated.isParked = false;
             updated.speed = 20;
             
+            // 주차 매니저에 점유 해제 업데이트
+            if (updated.parkingSlotId && parkingManagerRef.current) {
+              parkingManagerRef.current.updateOccupancy(updated.parkingSlotId, false);
+            }
+            
+            // UI 업데이트를 위해 상태도 업데이트
             setParkingSpots(prev => prev.map(spot => 
               spot.id === updated.parkingSlotId 
                 ? { ...spot, occupied: false, vehicleId: undefined }
@@ -1066,6 +1222,12 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
           ))
         );
       });
+      
+      // 동적 주차공간 업데이트
+      if (parkingManagerRef.current) {
+        const updatedSpots = parkingManagerRef.current.updateParkingSpots(simVehicles);
+        setParkingSpots(updatedSpots);
+      }
       
       // 혼잡도 계산
       const vehiclesInIntersection = simVehicles.filter(v => 
@@ -1356,41 +1518,41 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
           </g>
         ))}
         
-        {/* 정지선 */}
+        {/* 정지선 - 우측통행에 맞게 진입 방향에만 표시 */}
         <g>
-          {/* 북쪽 방향 정지선 */}
+          {/* 북쪽으로 진행하는 차량용 정지선 (남쪽에서 진입, 우측 차선) */}
           <line
-            x1={LAYOUT.mainRoad.x}
+            x1={LAYOUT.mainRoad.x + LAYOUT.mainRoad.width / 2 + 2}
             y1={LAYOUT.intersection.y + LAYOUT.intersection.height + 15}
             x2={LAYOUT.mainRoad.x + LAYOUT.mainRoad.width}
             y2={LAYOUT.intersection.y + LAYOUT.intersection.height + 15}
             stroke="#9CA3AF"
             strokeWidth={4}
           />
-          {/* 남쪽 방향 정지선 */}
+          {/* 남쪽으로 진행하는 차량용 정지선 (북쪽에서 진입, 좌측 차선) */}
           <line
             x1={LAYOUT.mainRoad.x}
             y1={LAYOUT.intersection.y - 15}
-            x2={LAYOUT.mainRoad.x + LAYOUT.mainRoad.width}
+            x2={LAYOUT.mainRoad.x + LAYOUT.mainRoad.width / 2 - 2}
             y2={LAYOUT.intersection.y - 15}
             stroke="#9CA3AF"
             strokeWidth={4}
           />
-          {/* 동쪽 방향 정지선 */}
+          {/* 동쪽으로 진행하는 차량용 정지선 (서쪽에서 진입, 아래쪽 차선) */}
           <line
             x1={LAYOUT.intersection.x - 15}
-            y1={LAYOUT.crossRoad.y}
+            y1={LAYOUT.crossRoad.y + LAYOUT.crossRoad.height / 2 + 2}
             x2={LAYOUT.intersection.x - 15}
             y2={LAYOUT.crossRoad.y + LAYOUT.crossRoad.height}
             stroke="#9CA3AF"
             strokeWidth={4}
           />
-          {/* 서쪽 방향 정지선 */}
+          {/* 서쪽으로 진행하는 차량용 정지선 (동쪽에서 진입, 위쪽 차선) */}
           <line
             x1={LAYOUT.intersection.x + LAYOUT.intersection.width + 15}
             y1={LAYOUT.crossRoad.y}
             x2={LAYOUT.intersection.x + LAYOUT.intersection.width + 15}
-            y2={LAYOUT.crossRoad.y + LAYOUT.crossRoad.height}
+            y2={LAYOUT.crossRoad.y + LAYOUT.crossRoad.height / 2 - 2}
             stroke="#9CA3AF"
             strokeWidth={4}
           />
@@ -1400,10 +1562,40 @@ const CrossroadSimulator: React.FC<CrossroadSimulatorProps> = ({
       {/* 정보 패널 */}
       <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4">
         <div className="text-sm space-y-2">
-          <div>차량 수: {simVehicles.filter(v => !v.isParked).length}대</div>
-          <div>주차 차량: {simVehicles.filter(v => v.isParked).length}대</div>
-          <div>혼잡도: {Math.round(congestionLevel)}%</div>
-          <div>빈 주차공간: {parkingSpots.filter(s => !s.occupied).length}개</div>
+          <div className="font-semibold text-gray-700 mb-2">실시간 교통 현황</div>
+          <div className="flex justify-between">
+            <span>활성 차량:</span>
+            <span className="font-medium">{simVehicles.filter(v => !v.isParked).length}대</span>
+          </div>
+          <div className="flex justify-between">
+            <span>주차 차량:</span>
+            <span className="font-medium">{simVehicles.filter(v => v.isParked).length}대</span>
+          </div>
+          <div className="flex justify-between">
+            <span>혼잡도:</span>
+            <span className={`font-medium ${
+              congestionLevel > 70 ? 'text-red-600' : 
+              congestionLevel > 40 ? 'text-yellow-600' : 'text-green-600'
+            }`}>{Math.round(congestionLevel)}%</span>
+          </div>
+          <div className="border-t pt-2 mt-2">
+            <div className="font-semibold text-gray-700 mb-1">동적 주차 시스템</div>
+            <div className="flex justify-between">
+              <span>전체 주차공간:</span>
+              <span className="font-medium">{parkingSpots.length}개</span>
+            </div>
+            <div className="flex justify-between">
+              <span>사용 가능:</span>
+              <span className="font-medium text-green-600">
+                {parkingSpots.filter(s => !s.occupied).length}개
+              </span>
+            </div>
+            <div className="text-xs text-gray-500 mt-2">
+              {congestionLevel > 70 ? '🔴 혼잡: 주차공간 최소화' :
+               congestionLevel > 40 ? '🟡 보통: 제한적 주차 가능' :
+               '🟢 한산: 주차공간 활성화'}
+            </div>
+          </div>
         </div>
       </div>
     </div>
